@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /e/projects/Personal/ashral -type f -name *.gradle -o -name *.xml -o -name *.properties -o -name *.pbxproj -o -name *.swift -o -name *.kt -o -name *.java -o -name *.dart -o -name *.json -o -name *.yaml -o -name *.yml -o -name *.toml -o -name *.cfg -o -name *.conf)"
+    ]
+  }
+}

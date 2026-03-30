@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "27067095291",
+    "project_id": "ashral",
+    "storage_bucket": "ashral.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:27067095291:android:6cc866750e14b2fde6b85e",
+        "android_client_info": {
+          "package_name": "com.malaiahlabs.ashral"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAYK-Dc1FdUMIOBVrxoHxf1pp_yKdMpDuI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
