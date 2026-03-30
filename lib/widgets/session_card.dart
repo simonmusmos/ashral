@@ -146,16 +146,8 @@ class _SessionCardState extends State<SessionCard> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Active indicator dot
-            Container(
-              width: 6,
-              height: 6,
-              margin: const EdgeInsets.only(right: 14, top: 1),
-              decoration: const BoxDecoration(
-                color: Color(0xFF22C55E),
-                shape: BoxShape.circle,
-              ),
-            ),
+            // Agent logo badge
+            _AgentBadge(agent: agent),
 
             // Session info
             Expanded(
@@ -217,6 +209,66 @@ class _SessionCardState extends State<SessionCard> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _AgentBadge extends StatelessWidget {
+  final String agent;
+
+  const _AgentBadge({required this.agent});
+
+  static String? _assetPath(String agent) {
+    final n = agent.toLowerCase();
+    if (n.contains('claude')) return 'assets/images/agents/claude.png';
+    if (n.contains('codex') || n.contains('openai') || n.contains('gpt')) {
+      return 'assets/images/agents/openai.png';
+    }
+    return null;
+  }
+
+  static ({Color bg, String label}) _fallback(String agent) {
+    final n = agent.toLowerCase();
+    if (n.contains('gemini') || n.contains('google')) {
+      return (bg: const Color(0xFF4285F4), label: 'G');
+    }
+    if (n.contains('cursor')) return (bg: const Color(0xFF7C5CFC), label: 'Cur');
+    if (n.contains('copilot') || n.contains('github')) {
+      return (bg: const Color(0xFF2F81F7), label: 'GH');
+    }
+    if (n.contains('mistral')) return (bg: const Color(0xFFFF7000), label: 'M');
+    if (n.contains('grok') || n.contains('xai')) {
+      return (bg: const Color(0xFF1D9BF0), label: 'xAI');
+    }
+    final label = agent.isNotEmpty ? agent[0].toUpperCase() : '?';
+    return (bg: const Color(0xFF2A2A2A), label: label);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final path = _assetPath(agent);
+    return Container(
+      width: 30,
+      height: 30,
+      margin: const EdgeInsets.only(right: 14),
+      decoration: BoxDecoration(
+        color: path != null ? Colors.transparent : _fallback(agent).bg,
+        borderRadius: BorderRadius.circular(7),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: path != null
+          ? Image.asset(path, width: 30, height: 30, fit: BoxFit.contain)
+          : Center(
+              child: Text(
+                _fallback(agent).label,
+                style: GoogleFonts.ibmPlexMono(
+                  fontSize: _fallback(agent).label.length > 1 ? 9 : 12,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  letterSpacing: -0.3,
+                ),
+              ),
+            ),
     );
   }
 }
