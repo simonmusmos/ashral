@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../services/auth_service.dart';
 import '../services/notification_service.dart';
@@ -55,9 +56,14 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     if (sessionId != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Connected to session'),
+        SnackBar(
+          content: Text('Connected to session',
+              style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13, color: const Color(0xFFF2F2F2))),
+          backgroundColor: const Color(0xFF181818),
           behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       );
       _loadSessions();
@@ -72,8 +78,13 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to leave: $e'),
+            content: Text('Failed to leave: $e',
+                style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13, color: const Color(0xFFF2F2F2))),
+            backgroundColor: const Color(0xFF1E0A0A),
             behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8)),
           ),
         );
       }
@@ -81,24 +92,22 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _renameSession(String sessionId, String? customName) async {
-    // Optimistic update
     setState(() {
-      final idx = _sessions.indexWhere(
-          (s) => (s['sessionId'] ?? s['id']) == sessionId);
+      final idx = _sessions
+          .indexWhere((s) => (s['sessionId'] ?? s['id']) == sessionId);
       if (idx != -1) {
         _sessions[idx] = Map.of(_sessions[idx])..['customName'] = customName;
       }
     });
-
     try {
       await SessionService.renameSession(sessionId, customName);
     } catch (e) {
-      // Revert on failure
       _loadSessions();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to rename: $e'),
+            content: Text('Failed to rename: $e',
+                style: GoogleFonts.plusJakartaSans(fontSize: 13)),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -109,117 +118,186 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final user = AuthService.currentUser;
-    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Ashral',
-          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1),
+      backgroundColor: const Color(0xFF090909),
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildHeader(user?.email),
+            if (_permissionDenied) _buildNotifBanner(),
+            _buildScanButton(),
+            Expanded(child: _buildBody()),
+            if (kDebugMode && NotificationService.fcmToken != null)
+              _FcmTokenDebugBar(token: NotificationService.fcmToken!),
+          ],
         ),
-        actions: [
-          if (user?.email != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 4),
-              child: Center(
-                child: Text(
-                  user!.email!,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurface.withOpacity(0.6),
-                      ),
-                ),
-              ),
-            ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh sessions',
-            onPressed: _loadSessions,
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Sign out',
-            onPressed: () {
-              NotificationService.reset();
-              AuthService.signOut();
-            },
-          ),
-        ],
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (_permissionDenied)
-            MaterialBanner(
-              padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-              leading: const Icon(Icons.notifications_off_outlined),
-              content: const Text(
-                'Notifications are disabled. Enable them in Settings to receive agent alerts.',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => setState(() => _permissionDenied = false),
-                  child: const Text('Dismiss'),
-                ),
-              ],
-            ),
+    );
+  }
 
-          // Scan QR button
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 28, 20, 8),
-            child: FilledButton.icon(
-              onPressed: _openScanner,
-              icon: const Icon(Icons.qr_code_scanner, size: 26),
-              label: const Text('Scan QR Code'),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(58),
-                textStyle: const TextStyle(
-                    fontSize: 17, fontWeight: FontWeight.w600),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+  Widget _buildHeader(String? email) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 14, 18),
+          child: Row(
+            children: [
+              Text(
+                'Ashral',
+                style: GoogleFonts.bricolageGrotesque(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFFF2F2F2),
+                  letterSpacing: -0.5,
                 ),
               ),
+              const Spacer(),
+              if (email != null)
+                Flexible(
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 2),
+                    child: Text(
+                      email,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        color: const Color(0xFF3A3A3A),
+                      ),
+                    ),
+                  ),
+                ),
+              IconButton(
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                color: const Color(0xFF4A4A4A),
+                tooltip: 'Refresh',
+                onPressed: _loadSessions,
+                visualDensity: VisualDensity.compact,
+              ),
+              IconButton(
+                icon: const Icon(Icons.logout_rounded, size: 18),
+                color: const Color(0xFF4A4A4A),
+                tooltip: 'Sign out',
+                onPressed: () {
+                  NotificationService.reset();
+                  AuthService.signOut();
+                },
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1, color: Color(0xFF181818)),
+      ],
+    );
+  }
+
+  Widget _buildNotifBanner() {
+    return Container(
+      color: const Color(0xFF0F0D00),
+      padding: const EdgeInsets.fromLTRB(20, 10, 12, 10),
+      child: Row(
+        children: [
+          const Icon(Icons.notifications_off_outlined,
+              size: 14, color: Color(0xFF666633)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Notifications disabled — enable in Settings for agent alerts.',
+              style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12, color: const Color(0xFF555533)),
             ),
           ),
-
-          // Sessions list
-          Expanded(child: _buildSessionsList(colorScheme)),
-
-          // Debug FCM token
-          if (kDebugMode && NotificationService.fcmToken != null)
-            _FcmTokenDebugBar(token: NotificationService.fcmToken!),
+          TextButton(
+            onPressed: () => setState(() => _permissionDenied = false),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF888855),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              visualDensity: VisualDensity.compact,
+            ),
+            child: Text('Dismiss',
+                style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11, fontWeight: FontWeight.w600)),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSessionsList(ColorScheme colorScheme) {
+  Widget _buildScanButton() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+      child: GestureDetector(
+        onTap: _openScanner,
+        child: Container(
+          height: 58,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF2F2F2),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.qr_code_scanner_rounded,
+                  size: 20, color: Color(0xFF090909)),
+              const SizedBox(width: 10),
+              Text(
+                'Scan QR Code',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF090909),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
     if (_loadingSessions) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(
+          color: Color(0xFF333333),
+          strokeWidth: 1.5,
+        ),
+      );
     }
 
     if (_sessionsError != null) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(32),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.cloud_off, size: 48, color: colorScheme.error),
-              const SizedBox(height: 12),
-              Text('Could not load sessions',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(color: colorScheme.error)),
+              const Icon(Icons.cloud_off_outlined,
+                  size: 36, color: Color(0xFF2A2A2A)),
+              const SizedBox(height: 14),
+              Text(
+                'Could not load sessions',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF5C5C5C),
+                ),
+              ),
               const SizedBox(height: 6),
-              Text(_sessionsError!,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurface.withOpacity(0.5))),
-              const SizedBox(height: 16),
+              Text(
+                _sessionsError!,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12, color: const Color(0xFF333333)),
+              ),
+              const SizedBox(height: 20),
               OutlinedButton(
                 onPressed: _loadSessions,
-                child: const Text('Retry'),
+                child: Text('Try again',
+                    style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13, fontWeight: FontWeight.w500)),
               ),
             ],
           ),
@@ -232,16 +310,23 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.sensors_off,
-                size: 52, color: colorScheme.outlineVariant),
-            const SizedBox(height: 14),
-            Text('No active sessions',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: colorScheme.onSurface.withOpacity(0.5))),
-            const SizedBox(height: 4),
-            Text('Scan a QR code from your agent terminal',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurface.withOpacity(0.4))),
+            const Icon(Icons.sensors_off_rounded,
+                size: 32, color: Color(0xFF222222)),
+            const SizedBox(height: 16),
+            Text(
+              'No active sessions',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF383838),
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              'Scan a QR code from your agent terminal',
+              style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12, color: const Color(0xFF2A2A2A)),
+            ),
           ],
         ),
       );
@@ -250,25 +335,56 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Section header
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 6),
-          child: Text(
-            'ACTIVE SESSIONS',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: colorScheme.onSurface.withOpacity(0.5),
-                letterSpacing: 1),
+          padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
+          child: Row(
+            children: [
+              Text(
+                'SESSIONS',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF3A3A3A),
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF161616),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: const Color(0xFF222222)),
+                ),
+                child: Text(
+                  '${_sessions.length}',
+                  style: GoogleFonts.ibmPlexMono(
+                    fontSize: 10,
+                    color: const Color(0xFF4A4A4A),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
+
+        const SizedBox(height: 12),
+
         Expanded(
           child: RefreshIndicator(
             onRefresh: _loadSessions,
+            color: const Color(0xFFF2F2F2),
+            backgroundColor: const Color(0xFF161616),
             child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: EdgeInsets.zero,
               itemCount: _sessions.length,
               itemBuilder: (context, i) {
                 final session = _sessions[i];
-                final sessionId =
-                    session['sessionId'] as String? ?? session['id'] as String? ?? '';
+                final sessionId = session['sessionId'] as String? ??
+                    session['id'] as String? ??
+                    '';
                 return SessionCard(
                   session: session,
                   onLeave: () => _leaveSession(sessionId),

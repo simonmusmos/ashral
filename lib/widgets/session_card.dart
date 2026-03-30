@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class SessionCard extends StatefulWidget {
   final Map<String, dynamic> session;
@@ -24,7 +25,9 @@ class _SessionCardState extends State<SessionCard> {
     if (customName != null && customName.isNotEmpty) return customName;
     final name = widget.session['name'] as String?;
     if (name != null && name.isNotEmpty) return name;
-    return widget.session['sessionId'] as String? ?? widget.session['id'] as String? ?? '—';
+    return widget.session['sessionId'] as String? ??
+        widget.session['id'] as String? ??
+        '—';
   }
 
   Future<void> _handleLeave() async {
@@ -40,97 +43,179 @@ class _SessionCardState extends State<SessionCard> {
     final current = widget.session['customName'] as String? ?? '';
     final controller = TextEditingController(text: current);
 
-    final result = await showDialog<String>(
+    final result = await showModalBottomSheet<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Rename session'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(
-            hintText: 'Custom name (leave empty to reset)',
-            border: OutlineInputBorder(),
-          ),
-          onSubmitted: (_) => Navigator.pop(ctx, controller.text.trim()),
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF111111),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+        side: BorderSide(color: Color(0xFF222222)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          top: 24,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 28,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, null),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('Save'),
-          ),
-        ],
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Rename session',
+              style: GoogleFonts.bricolageGrotesque(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFFF2F2F2),
+                letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Leave empty to reset to the default name.',
+              style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13, color: const Color(0xFF4A4A4A)),
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              textCapitalization: TextCapitalization.sentences,
+              style: GoogleFonts.plusJakartaSans(
+                  fontSize: 14, color: const Color(0xFFF2F2F2)),
+              decoration: InputDecoration(
+                hintText: 'Session name…',
+                hintStyle: GoogleFonts.plusJakartaSans(
+                    fontSize: 14, color: const Color(0xFF333333)),
+              ),
+              onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, null),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFF222222)),
+                      foregroundColor: const Color(0xFF5C5C5C),
+                    ),
+                    child: Text('Cancel',
+                        style:
+                            GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w500)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () =>
+                        Navigator.pop(ctx, controller.text.trim()),
+                    child: Text('Save',
+                        style:
+                            GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
     controller.dispose();
 
-    if (result == null) return; // cancelled
-    // Empty string → clear custom name (fall back to default)
+    if (result == null) return;
     await widget.onRename(result.isEmpty ? null : result);
   }
 
   @override
   Widget build(BuildContext context) {
     final agent = widget.session['agent'] as String? ?? '';
-    final colorScheme = Theme.of(context).colorScheme;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: ListTile(
-        contentPadding:
-            const EdgeInsets.only(left: 16, right: 4, top: 4, bottom: 4),
-        leading: CircleAvatar(
-          backgroundColor: colorScheme.primaryContainer,
-          child: Icon(Icons.terminal,
-              color: colorScheme.onPrimaryContainer, size: 20),
+    return InkWell(
+      onTap: _handleRename,
+      overlayColor: WidgetStateProperty.all(
+          const Color(0xFFF2F2F2).withValues(alpha: 0.03)),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+        decoration: const BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: Color(0xFF141414)),
+          ),
         ),
-        title: Row(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Expanded(
-              child: Text(
-                _displayName(),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+            // Active indicator dot
+            Container(
+              width: 6,
+              height: 6,
+              margin: const EdgeInsets.only(right: 14, top: 1),
+              decoration: const BoxDecoration(
+                color: Color(0xFF22C55E),
+                shape: BoxShape.circle,
               ),
             ),
-            IconButton(
-              icon: Icon(Icons.edit_outlined,
-                  size: 16, color: colorScheme.onSurface.withOpacity(0.4)),
-              tooltip: 'Rename',
-              visualDensity: VisualDensity.compact,
-              onPressed: _handleRename,
+
+            // Session info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _displayName(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFFE8E8E8),
+                    ),
+                  ),
+                  if (agent.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      agent,
+                      style: GoogleFonts.ibmPlexMono(
+                        fontSize: 11,
+                        color: const Color(0xFF3A3A3A),
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
+
+            // Leave action
+            const SizedBox(width: 16),
+            _leaving
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      color: Color(0xFF333333),
+                    ),
+                  )
+                : GestureDetector(
+                    onTap: _handleLeave,
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 4, horizontal: 2),
+                      child: Text(
+                        'Leave',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFFEF4444),
+                        ),
+                      ),
+                    ),
+                  ),
           ],
         ),
-        subtitle: agent.isNotEmpty
-            ? Row(
-                children: [
-                  Icon(Icons.smart_toy_outlined,
-                      size: 13, color: colorScheme.primary),
-                  const SizedBox(width: 4),
-                  Text(agent,
-                      style: TextStyle(
-                          color: colorScheme.primary, fontSize: 12)),
-                ],
-              )
-            : null,
-        trailing: _leaving
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : TextButton(
-                onPressed: _handleLeave,
-                style: TextButton.styleFrom(
-                    foregroundColor: colorScheme.error),
-                child: const Text('Leave'),
-              ),
       ),
     );
   }

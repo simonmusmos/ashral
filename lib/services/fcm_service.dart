@@ -16,7 +16,7 @@ class FcmService {
   static Future<void> saveFcmToken(String uid) async {
     try {
       await requestPermission();
-      final token = await _messaging.getToken();
+      final token = await _getFcmToken();
       if (token == null) return;
 
       await FirebaseFirestore.instance.collection('users').doc(uid).set(
@@ -40,5 +40,24 @@ class FcmService {
     } catch (e) {
       debugPrint('FcmService: failed to save token — $e');
     }
+  }
+
+  static Future<String?> _getFcmToken() async {
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      const attempts = 10;
+      for (var i = 0; i < attempts; i++) {
+        final apnsToken = await _messaging.getAPNSToken();
+        if (apnsToken != null && apnsToken.isNotEmpty) {
+          return _messaging.getToken();
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      }
+      debugPrint(
+        'FcmService: APNS token not available yet; skipping initial FCM token fetch.',
+      );
+      return null;
+    }
+
+    return _messaging.getToken();
   }
 }

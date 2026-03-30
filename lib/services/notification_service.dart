@@ -36,9 +36,9 @@ class NotificationService {
   /// Requests permission, fetches the FCM token, registers the device with
   /// the backend, and sets up foreground + token-refresh listeners.
   ///
-  /// Returns true if permission was granted and a token is available.
+  /// Returns true if notification permission was granted.
   static Future<bool> initialize() async {
-    if (_initialized) return _fcmToken != null;
+    if (_initialized) return true;
     _initialized = true;
 
     // Init flutter_local_notifications
@@ -60,7 +60,7 @@ class NotificationService {
     if (!granted) return false;
 
     // Get token + register device
-    _fcmToken = await _messaging.getToken();
+    _fcmToken = await _getFcmToken();
     if (_fcmToken != null) await _registerDevice(_fcmToken!);
 
     // Token refresh — re-register device only, userSessions persists
@@ -72,7 +72,26 @@ class NotificationService {
     // Foreground messages
     FirebaseMessaging.onMessage.listen(_showForegroundNotification);
 
-    return _fcmToken != null;
+    return true;
+  }
+
+  static Future<String?> _getFcmToken() async {
+    if (!kIsWeb && Platform.isIOS) {
+      const attempts = 10;
+      for (var i = 0; i < attempts; i++) {
+        final apnsToken = await _messaging.getAPNSToken();
+        if (apnsToken != null && apnsToken.isNotEmpty) {
+          return _messaging.getToken();
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      }
+      debugPrint(
+        'NotificationService: APNS token not available yet; skipping initial FCM token fetch.',
+      );
+      return null;
+    }
+
+    return _messaging.getToken();
   }
 
   static Future<void> _registerDevice(String token) async {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../config/constants.dart';
@@ -78,9 +79,10 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     final result = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
+      backgroundColor: const Color(0xFF111111),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+        side: BorderSide(color: Color(0xFF1E1E1E)),
       ),
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(
@@ -93,23 +95,32 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
+            Text(
               'Name this session',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: GoogleFonts.bricolageGrotesque(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                letterSpacing: -0.3,
+              ),
             ),
-            const SizedBox(height: 6),
-            const Text(
+            const SizedBox(height: 4),
+            Text(
               "Give this session a name you'll recognise (optional).",
-              style: TextStyle(fontSize: 13, color: Colors.grey),
+              style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13, color: const Color(0xFF4A4A4A)),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             TextField(
               controller: controller,
               autofocus: true,
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
+              style: GoogleFonts.plusJakartaSans(
+                  fontSize: 14, color: Colors.white),
+              decoration: InputDecoration(
                 hintText: 'e.g. My MacBook, Work laptop…',
-                border: OutlineInputBorder(),
+                hintStyle: GoogleFonts.plusJakartaSans(
+                    fontSize: 14, color: const Color(0xFF333333)),
               ),
               onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
             ),
@@ -119,7 +130,13 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => Navigator.pop(ctx, null),
-                    child: const Text('Cancel'),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFF222222)),
+                      foregroundColor: const Color(0xFF5C5C5C),
+                    ),
+                    child: Text('Cancel',
+                        style: GoogleFonts.plusJakartaSans(
+                            fontWeight: FontWeight.w500)),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -127,7 +144,9 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                   child: FilledButton(
                     onPressed: () =>
                         Navigator.pop(ctx, controller.text.trim()),
-                    child: const Text('Connect'),
+                    child: Text('Connect',
+                        style: GoogleFonts.plusJakartaSans(
+                            fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],
@@ -147,7 +166,14 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        title: const Text('Scan QR Code'),
+        title: Text(
+          'Scan QR Code',
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.pop(context),
@@ -164,11 +190,13 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
           // Viewfinder overlay
           Container(
-            width: 260,
-            height: 260,
+            width: 256,
+            height: 256,
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.white, width: 2.5),
-              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  width: 1),
+              borderRadius: BorderRadius.circular(12),
             ),
           ),
 
@@ -183,27 +211,35 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             child: Column(
               children: [
                 if (_processing) ...[
-                  const CircularProgressIndicator(color: Colors.white),
-                  const SizedBox(height: 12),
-                  const Text('Joining session…',
-                      style: TextStyle(color: Colors.white70)),
+                  const CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 1.5,
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Joining session…',
+                    style: GoogleFonts.plusJakartaSans(
+                        color: const Color(0xFF888888), fontSize: 13),
+                  ),
                 ] else if (_errorMessage != null) ...[
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
-                      color: Colors.red.shade700.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(12),
+                      color: const Color(0xFF160808),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF2E1212)),
                     ),
                     child: Row(
                       children: [
                         const Icon(Icons.error_outline,
-                            color: Colors.white, size: 18),
+                            color: Color(0xFFEF4444), size: 15),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             _errorMessage!,
-                            style: const TextStyle(color: Colors.white),
+                            style: GoogleFonts.plusJakartaSans(
+                                color: const Color(0xFFEF4444), fontSize: 13),
                           ),
                         ),
                       ],
@@ -211,15 +247,18 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                   ),
                   const SizedBox(height: 10),
                   TextButton(
-                    onPressed: () =>
-                        setState(() => _errorMessage = null),
-                    child: const Text('Try again',
-                        style: TextStyle(color: Colors.white70)),
+                    onPressed: () => setState(() => _errorMessage = null),
+                    style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFFAAAAAA)),
+                    child: Text('Try again',
+                        style: GoogleFonts.plusJakartaSans(
+                            fontSize: 13, fontWeight: FontWeight.w500)),
                   ),
                 ] else
-                  const Text(
+                  Text(
                     'Point at the QR code in your terminal',
-                    style: TextStyle(color: Colors.white70, fontSize: 14),
+                    style: GoogleFonts.plusJakartaSans(
+                        color: const Color(0xFF555555), fontSize: 13),
                   ),
               ],
             ),
@@ -230,10 +269,10 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   }
 
   List<Widget> _buildCorners() {
-    const size = 28.0;
-    const thickness = 4.0;
+    const size = 26.0;
+    const thickness = 2.5;
     const color = Colors.white;
-    const radius = 4.0;
+    const radius = 3.0;
     const offset = 130 - thickness / 2; // half of 260px viewfinder
 
     Widget corner(double top, double left, bool flipH, bool flipV) {

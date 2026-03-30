@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'firebase_options.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
@@ -24,11 +25,14 @@ void main() async {
 }
 
 ThemeData _buildTheme() {
-  const background = Color(0xFF000000);
-  const surface = Color(0xFF0A0A0A);
-  const border = Color(0xFF1F1F1F);
-  const textPrimary = Color(0xFFFFFFFF);
-  const textMuted = Color(0xFF888888);
+  const background = Color(0xFF090909);
+  const surface = Color(0xFF111111);
+  const border = Color(0xFF222222);
+  const textPrimary = Color(0xFFF2F2F2);
+  const textSecondary = Color(0xFF5C5C5C);
+
+  final jakartaBase =
+      GoogleFonts.plusJakartaSansTextTheme(ThemeData.dark().textTheme);
 
   return ThemeData(
     useMaterial3: true,
@@ -40,59 +44,59 @@ ThemeData _buildTheme() {
       surface: surface,
       onSurface: textPrimary,
       outline: border,
-      error: Color(0xFFFF4444),
+      error: Color(0xFFEF4444),
       onError: textPrimary,
     ),
-    textTheme: const TextTheme(
-      bodyMedium: TextStyle(color: textMuted),
-      bodySmall: TextStyle(color: textMuted),
+    textTheme: jakartaBase.copyWith(
+      bodyMedium: jakartaBase.bodyMedium?.copyWith(color: textSecondary),
+      bodySmall: jakartaBase.bodySmall?.copyWith(color: textSecondary),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: surface,
-      hintStyle: const TextStyle(color: textMuted, fontSize: 14),
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      hintStyle: GoogleFonts.plusJakartaSans(color: const Color(0xFF3A3A3A), fontSize: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: border),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: border),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: textPrimary),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(6),
-        borderSide: const BorderSide(color: Color(0xFFFF4444)),
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFEF4444)),
       ),
       focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(6),
-        borderSide: const BorderSide(color: Color(0xFFFF4444)),
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFEF4444)),
       ),
-      errorStyle: const TextStyle(color: Color(0xFFFF4444), fontSize: 12),
+      errorStyle: GoogleFonts.plusJakartaSans(
+          color: const Color(0xFFEF4444), fontSize: 12),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         backgroundColor: textPrimary,
         foregroundColor: background,
-        minimumSize: const Size.fromHeight(42),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-        textStyle:
-            const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        minimumSize: const Size.fromHeight(50),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        textStyle: GoogleFonts.plusJakartaSans(
+            fontSize: 14, fontWeight: FontWeight.w600),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: textPrimary,
         side: const BorderSide(color: border),
-        minimumSize: const Size.fromHeight(42),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-        textStyle:
-            const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        minimumSize: const Size.fromHeight(44),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        textStyle: GoogleFonts.plusJakartaSans(
+            fontSize: 14, fontWeight: FontWeight.w500),
       ),
     ),
     cardTheme: CardThemeData(
@@ -104,17 +108,17 @@ ThemeData _buildTheme() {
       ),
     ),
     dividerTheme: const DividerThemeData(color: border, thickness: 1),
-    appBarTheme: const AppBarTheme(
+    appBarTheme: AppBarTheme(
       backgroundColor: background,
       foregroundColor: textPrimary,
       elevation: 0,
       scrolledUnderElevation: 0,
-      titleTextStyle: TextStyle(
+      titleTextStyle: GoogleFonts.plusJakartaSans(
         color: textPrimary,
         fontSize: 15,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w600,
       ),
-      iconTheme: IconThemeData(color: textMuted),
+      iconTheme: const IconThemeData(color: textSecondary),
     ),
   );
 }
@@ -135,7 +139,7 @@ class AshralApp extends StatelessWidget {
             return const Scaffold(
               body: Center(
                 child: CircularProgressIndicator(
-                  color: Colors.white,
+                  color: Color(0xFFF2F2F2),
                   strokeWidth: 1.5,
                 ),
               ),
