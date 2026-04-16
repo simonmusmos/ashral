@@ -29,9 +29,12 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
   bool _initialLoading = true;
   String? _error;
   Timer? _pollTimer;
+  Timer? _elapsedTimer;
   bool _autoScroll = true;
   Map<String, dynamic>? _pendingAction;
   bool _responding = false;
+  Map<String, dynamic>? _sessionDetail;
+  Duration _elapsed = Duration.zero;
 
   @override
   void initState() {
@@ -43,6 +46,7 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _elapsedTimer?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
@@ -51,11 +55,35 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
   void _onScroll() {
     if (!_scrollController.hasClients) return;
     final atBottom = _scrollController.offset >=
-        _scrollController.position.maxScrollExtent - 40;
+        _scrollController.position.maxScrollExtent - 60;
     if (atBottom != _autoScroll) {
       setState(() => _autoScroll = atBottom);
     }
   }
+
+  // ── Elapsed time ──────────────────────────────────────────────────────────
+
+  void _startElapsedTimer(DateTime startedAt) {
+    _elapsedTimer?.cancel();
+    _elapsed = DateTime.now().difference(startedAt);
+    final isLive = AppStatus.isLive(_status);
+    if (!isLive) return; // static elapsed for completed sessions
+    _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _elapsed = DateTime.now().difference(startedAt));
+    });
+  }
+
+  String get _elapsedLabel {
+    final h = _elapsed.inHours;
+    final m = _elapsed.inMinutes.remainder(60);
+    final s = _elapsed.inSeconds.remainder(60);
+    if (h > 0) return '${h}h ${m}m ${s}s';
+    if (m > 0) return '${m}m ${s}s';
+    return '${s}s';
+  }
+
+  // ── Polling ───────────────────────────────────────────────────────────────
 
   Future<void> _poll() async {
     try {
@@ -83,11 +111,22 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
       final pendingAction =
           rawAction is Map<String, dynamic> ? rawAction : null;
 
+      // Parse createdAt for elapsed timer
+      DateTime? startedAt;
+      final rawCreatedAt = detail['createdAt'];
+      if (rawCreatedAt is Map && rawCreatedAt['_seconds'] != null) {
+        startedAt = DateTime.fromMillisecondsSinceEpoch(
+            (rawCreatedAt['_seconds'] as int) * 1000);
+      }
+
       setState(() {
         _initialLoading = false;
         _error = null;
+        _sessionDetail = detail.isNotEmpty ? detail : _sessionDetail;
         if (!_responding) _pendingAction = pendingAction;
       });
+
+      if (startedAt != null) _startElapsedTimer(startedAt);
 
       if (added && _autoScroll) {
         WidgetsBinding.instance
@@ -137,13 +176,20 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
     if (!_scrollController.hasClients) return;
     _scrollController.animateTo(
       _scrollController.position.maxScrollExtent,
-      duration: const Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 220),
       curve: Curves.easeOut,
     );
   }
 
+  // ── Data helpers ──────────────────────────────────────────────────────────
+
   String get _displayName {
+    final detail = _sessionDetail;
     final meta = widget.sessionMeta;
+    if (detail != null) {
+      final n = detail['name'] as String?;
+      if (n != null && n.isNotEmpty) return n;
+    }
     if (meta != null) {
       final cn = meta['customName'] as String?;
       if (cn != null && cn.isNotEmpty) return cn;
@@ -154,11 +200,15 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
   }
 
   String get _agentName {
-    return (widget.sessionMeta?['agent'] as String?) ?? '';
+    return (_sessionDetail?['agent'] as String?) ??
+        (widget.sessionMeta?['agent'] as String?) ??
+        '';
   }
 
   String get _status {
-    return (widget.sessionMeta?['status'] as String?) ?? '';
+    return (_sessionDetail?['status'] as String?) ??
+        (widget.sessionMeta?['status'] as String?) ??
+        '';
   }
 
   void _copyAll() {
@@ -178,71 +228,35 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+    final hasPending = _pendingAction != null;
+
     return Scaffold(
       backgroundColor: AppColors.bgDeep,
-      appBar: AppBar(
-        backgroundColor: AppColors.bgDeep,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 16),
-          color: AppColors.textSecondary,
-          onPressed: () => Navigator.pop(context),
-        ),
-        titleSpacing: 0,
-        title: Row(
-          children: [
-            AgentBadge(agent: _agentName, size: 30),
-            const SizedBox(width: 2),
-            Expanded(
-              child: Text(
-                _displayName,
-                overflow: TextOverflow.ellipsis,
-                style: AppText.ui(
-                    size: 15, weight: FontWeight.w600),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          if (_chunks.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.copy_rounded, size: 17),
-              color: AppColors.textMuted,
-              tooltip: 'Copy all output',
-              onPressed: _copyAll,
-              visualDensity: VisualDensity.compact,
-            ),
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, size: 18),
-            color: AppColors.textMuted,
-            tooltip: 'Refresh',
-            onPressed: () {
-              _pollTimer?.cancel();
-              _poll();
-            },
-            visualDensity: VisualDensity.compact,
-          ),
-          const SizedBox(width: 4),
-        ],
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: AppColors.borderSubtle),
-        ),
-      ),
-      body: _initialLoading
-          ? const Center(
-              child: CircularProgressIndicator(
-                color: AppColors.textMuted,
-                strokeWidth: 1.5,
-              ),
-            )
-          : _error != null && _chunks.isEmpty
-              ? _buildError()
-              : Stack(
-                  children: [
-                    _buildOutput(),
-                    if (_pendingAction != null) _buildActionBar(_pendingAction!),
-                  ],
+      body: SafeArea(
+        bottom: false,
+        child: _initialLoading
+            ? const Center(
+                child: CircularProgressIndicator(
+                  color: AppColors.textMuted,
+                  strokeWidth: 1.5,
                 ),
+              )
+            : _error != null && _chunks.isEmpty
+                ? _buildError()
+                : Stack(
+                    children: [
+                      Column(
+                        children: [
+                          _buildHeader(),
+                          Expanded(child: _buildBody()),
+                        ],
+                      ),
+                      if (hasPending)
+                        _buildActionBar(_pendingAction!, bottomPad),
+                    ],
+                  ),
+      ),
       floatingActionButton: !_autoScroll && _chunks.isNotEmpty
           ? FloatingActionButton.small(
               onPressed: () {
@@ -251,10 +265,334 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
               },
               backgroundColor: AppColors.bgElevated,
               foregroundColor: AppColors.textSecondary,
-              elevation: 2,
-              child: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
+              elevation: 3,
+              child: const Icon(Icons.keyboard_arrow_down_rounded, size: 22),
             )
           : null,
+    );
+  }
+
+  // ── Header ────────────────────────────────────────────────────────────────
+
+  Widget _buildHeader() {
+    final status = _status;
+    final palette = status.isNotEmpty ? AppStatus.palette(status) : null;
+    final isLive = AppStatus.isLive(status);
+    final isCompleted =
+        status.toLowerCase() == 'completed' || status.toLowerCase() == 'done';
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      decoration: BoxDecoration(
+        color: AppColors.bgDeep,
+        border: Border(
+          bottom: BorderSide(color: AppColors.borderSubtle),
+          // Glow border for live sessions
+          left: isLive
+              ? const BorderSide(color: AppColors.running, width: 2)
+              : BorderSide.none,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Top row: back + name + actions
+          Row(
+            children: [
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                behavior: HitTestBehavior.opaque,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.chevron_left_rounded,
+                        size: 22, color: AppColors.ai),
+                    Text(
+                      'Sessions',
+                      style: AppText.ui(
+                          size: 15,
+                          weight: FontWeight.w500,
+                          color: AppColors.ai),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              if (_chunks.isNotEmpty)
+                _IconBtn(
+                  icon: Icons.copy_rounded,
+                  tooltip: 'Copy all output',
+                  onTap: _copyAll,
+                ),
+              const SizedBox(width: 4),
+              _IconBtn(
+                icon: Icons.refresh_rounded,
+                tooltip: 'Refresh',
+                onTap: () {
+                  _pollTimer?.cancel();
+                  _poll();
+                },
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+
+          // Session card
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.bgBase,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: isLive
+                    ? AppColors.runningBorder
+                    : isCompleted
+                        ? AppColors.successBorder
+                        : AppColors.border,
+                width: 1,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Agent icon + session name
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AgentBadge(agent: _agentName, size: 38),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppText.display(size: 18),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            _agentName.isNotEmpty ? _agentName : widget.sessionId,
+                            style: AppText.mono(
+                                size: 11, color: AppColors.textSecondary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                if (palette != null) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      // Status badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 9, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: palette.bg,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: palette.border),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (isLive)
+                              _PulsingDot(color: palette.dot)
+                            else
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: palette.dot,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            const SizedBox(width: 7),
+                            Text(
+                              status.toUpperCase(),
+                              style: AppText.mono(
+                                size: 10,
+                                weight: FontWeight.w600,
+                                color: palette.text,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Elapsed time chip
+                      if (_elapsed != Duration.zero) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 9, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.bgElevated,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.schedule_rounded,
+                                  size: 11, color: AppColors.textMuted),
+                              const SizedBox(width: 5),
+                              Text(
+                                _elapsedLabel,
+                                style: AppText.mono(
+                                    size: 11, color: AppColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      const Spacer(),
+
+                      // Chunk count
+                      if (_chunks.isNotEmpty)
+                        Text(
+                          '${_chunks.length} chunks',
+                          style: AppText.mono(
+                              size: 10, color: AppColors.textMuted),
+                        ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Body ──────────────────────────────────────────────────────────────────
+
+  Widget _buildBody() {
+    if (_chunks.isEmpty) return _buildEmptyState();
+    return _buildTerminal();
+  }
+
+  Widget _buildTerminal() {
+    return Column(
+      children: [
+        // Terminal title bar
+        Container(
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: AppColors.bgElevated,
+            border:
+                Border(bottom: BorderSide(color: AppColors.border)),
+          ),
+          child: Row(
+            children: [
+              // Traffic lights
+              _dot(const Color(0xFFFF5F57)),
+              const SizedBox(width: 6),
+              _dot(const Color(0xFFFFBD2E)),
+              const SizedBox(width: 6),
+              _dot(const Color(0xFF28C840)),
+              const SizedBox(width: 12),
+              Text(
+                _displayName,
+                style: AppText.mono(size: 11, color: AppColors.textMuted),
+              ),
+            ],
+          ),
+        ),
+
+        // Output lines
+        Expanded(
+          child: ListView.builder(
+            controller: _scrollController,
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 32),
+            itemCount: _chunks.length,
+            itemBuilder: (context, i) {
+              final chunk = _chunks[i];
+              final text = chunk['text'] as String? ?? '';
+              final stream = chunk['stream'] as String? ?? 'stdout';
+              final isStderr = stream == 'stderr';
+              return Text(
+                text,
+                style: AppText.mono(
+                  size: 12,
+                  height: 1.55,
+                  color: isStderr
+                      ? AppColors.terminalErr
+                      : _lineColor(text),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  static Widget _dot(Color color) {
+    return Container(
+      width: 10,
+      height: 10,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
+
+  static Color _lineColor(String text) {
+    final l = text.trim();
+    if (l.startsWith('error') ||
+        l.startsWith('Error') ||
+        l.startsWith('ERR') ||
+        l.startsWith('✗')) {
+      return AppColors.terminalErr;
+    }
+    if (l.startsWith('warn') ||
+        l.startsWith('Warn') ||
+        l.startsWith('WARN') ||
+        l.startsWith('⚠')) {
+      return AppColors.terminalWarn;
+    }
+    if (l.startsWith(r'$') || l.startsWith('>') || l.startsWith('#')) {
+      return AppColors.terminalCmd;
+    }
+    if (l.startsWith('✓') ||
+        l.startsWith('✔') ||
+        l.startsWith('Done') ||
+        l.startsWith('SUCCESS') ||
+        l.startsWith('Completed')) {
+      return AppColors.terminalSuccess;
+    }
+    return AppColors.terminalText;
+  }
+
+  Widget _buildEmptyState() {
+    final isLive = AppStatus.isLive(_status);
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.terminal_rounded,
+              size: 30, color: AppColors.textMuted),
+          const SizedBox(height: 14),
+          Text(
+            isLive ? 'Waiting for output…' : 'No output recorded',
+            style: AppText.ui(size: 14, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 4),
+          if (isLive)
+            Text(
+              'Polling every 3 seconds',
+              style: AppText.mono(size: 11, color: AppColors.textMuted),
+            ),
+        ],
+      ),
     );
   }
 
@@ -300,150 +638,9 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
     );
   }
 
-  Widget _buildOutput() {
-    return Column(
-      children: [
-        if (_status.isNotEmpty) _buildStatusBar(),
-        Expanded(
-          child: _chunks.isEmpty ? _buildEmptyState() : _buildTerminal(),
-        ),
-      ],
-    );
-  }
+  // ── Action bar ────────────────────────────────────────────────────────────
 
-  Widget _buildStatusBar() {
-    final palette = AppStatus.palette(_status);
-    final isLive = AppStatus.isLive(_status);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.borderSubtle)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: palette.bg,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: palette.border),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (isLive)
-                  _PulsingDot(color: palette.dot)
-                else
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: palette.dot,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                const SizedBox(width: 7),
-                Text(
-                  _status,
-                  style: AppText.mono(
-                    size: 11,
-                    weight: FontWeight.w500,
-                    color: palette.text,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Spacer(),
-          Text(
-            '${_chunks.length} chunks',
-            style: AppText.mono(size: 10, color: AppColors.textMuted),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTerminal() {
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
-      itemCount: _chunks.length,
-      itemBuilder: (context, i) {
-        final chunk = _chunks[i];
-        final text = chunk['text'] as String? ?? '';
-        final stream = chunk['stream'] as String? ?? 'stdout';
-        final isStderr = stream == 'stderr';
-
-        return Text(
-          text,
-          style: AppText.mono(
-            size: 11.5,
-            height: 1.55,
-            color: isStderr
-                ? AppColors.terminalErr
-                : _outputLineColor(text),
-          ),
-        );
-      },
-    );
-  }
-
-  static Color _outputLineColor(String text) {
-    final l = text.trim();
-    if (l.startsWith('error') ||
-        l.startsWith('Error') ||
-        l.startsWith('ERR') ||
-        l.startsWith('✗')) {
-      return AppColors.terminalErr;
-    }
-    if (l.startsWith('warn') ||
-        l.startsWith('Warn') ||
-        l.startsWith('WARN') ||
-        l.startsWith('⚠')) {
-      return AppColors.terminalWarn;
-    }
-    if (l.startsWith(r'$') || l.startsWith('>') || l.startsWith('#')) {
-      return AppColors.terminalCmd;
-    }
-    if (l.startsWith('✓') ||
-        l.startsWith('✔') ||
-        l.startsWith('Done') ||
-        l.startsWith('SUCCESS') ||
-        l.startsWith('Completed')) {
-      return AppColors.terminalSuccess;
-    }
-    return AppColors.terminalText;
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.terminal_rounded,
-              size: 28, color: AppColors.textMuted),
-          const SizedBox(height: 12),
-          Text(
-            'No output yet',
-            style: AppText.ui(size: 13, color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Polling every 3 seconds…',
-            style: AppText.mono(size: 11, color: AppColors.textMuted),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Action bar ─────────────────────────────────────────────────────────────
-
-  Widget _buildActionBar(Map<String, dynamic> action) {
+  Widget _buildActionBar(Map<String, dynamic> action, double bottomPad) {
     final rawOptions = action['options'] as List<dynamic>?;
     final options = rawOptions?.cast<String>() ?? ['approve', 'deny'];
     final question = action['question'] as String?;
@@ -457,24 +654,38 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
           color: AppColors.bgDeep,
           border: Border(top: BorderSide(color: AppColors.border)),
         ),
-        padding: EdgeInsets.fromLTRB(
-          16,
-          16,
-          16,
-          MediaQuery.of(context).padding.bottom + 16,
-        ),
+        padding: EdgeInsets.fromLTRB(16, 14, 16, bottomPad + 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Pending action label
+            Row(
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: AppColors.waiting,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'ACTION REQUIRED',
+                  style: AppText.sectionLabel(),
+                ),
+              ],
+            ),
             if (question != null && question.isNotEmpty) ...[
+              const SizedBox(height: 10),
               Text(
                 question,
                 style: AppText.ui(
-                    size: 13, height: 1.5, color: AppColors.textPrimary),
+                    size: 14, height: 1.5, color: AppColors.textPrimary),
               ),
-              const SizedBox(height: 12),
             ],
+            const SizedBox(height: 12),
             ...List.generate((options.length / 2).ceil(), (rowIndex) {
               final start = rowIndex * 2;
               final end = (start + 2).clamp(0, options.length);
@@ -529,7 +740,7 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
               )
             : Text(label,
                 style: AppText.ui(
-                    size: 13,
+                    size: 14,
                     weight: FontWeight.w600,
                     color: AppColors.bgDeep)),
       );
@@ -545,13 +756,39 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       child: Text(label,
-          style:
-              AppText.ui(size: 13, weight: FontWeight.w500)),
+          style: AppText.ui(size: 14, weight: FontWeight.w500)),
     );
   }
 }
 
-// ── Pulsing dot ────────────────────────────────────────────────────────────────
+// ── Small widgets ─────────────────────────────────────────────────────────────
+
+class _IconBtn extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _IconBtn({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Icon(icon, size: 18, color: AppColors.textMuted),
+        ),
+      ),
+    );
+  }
+}
 
 class _PulsingDot extends StatefulWidget {
   final Color color;
