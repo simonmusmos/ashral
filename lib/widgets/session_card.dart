@@ -5,12 +5,14 @@ class SessionCard extends StatefulWidget {
   final Map<String, dynamic> session;
   final VoidCallback onLeave;
   final Future<void> Function(String? customName) onRename;
+  final VoidCallback? onTap;
 
   const SessionCard({
     super.key,
     required this.session,
     required this.onLeave,
     required this.onRename,
+    this.onTap,
   });
 
   @override
@@ -133,7 +135,7 @@ class _SessionCardState extends State<SessionCard> {
     final agent = widget.session['agent'] as String? ?? '';
 
     return InkWell(
-      onTap: _handleRename,
+      onTap: widget.onTap ?? _handleRename,
       overlayColor: WidgetStateProperty.all(
           const Color(0xFFF2F2F2).withValues(alpha: 0.03)),
       child: Container(
@@ -147,7 +149,7 @@ class _SessionCardState extends State<SessionCard> {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             // Agent logo badge
-            _AgentBadge(agent: agent),
+            AgentBadge(agent: agent),
 
             // Session info
             Expanded(
@@ -213,10 +215,10 @@ class _SessionCardState extends State<SessionCard> {
   }
 }
 
-class _AgentBadge extends StatelessWidget {
+class AgentBadge extends StatelessWidget {
   final String agent;
 
-  const _AgentBadge({required this.agent});
+  const AgentBadge({super.key, required this.agent});
 
   static String? _assetPath(String agent) {
     final n = agent.toLowerCase();

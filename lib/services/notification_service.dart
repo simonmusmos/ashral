@@ -3,10 +3,12 @@ import 'dart:io';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/constants.dart';
+import '../screens/session_screen.dart';
 import 'user_service.dart';
 
 class NotificationService {
@@ -16,8 +18,13 @@ class NotificationService {
 
   static String? _fcmToken;
   static bool _initialized = false;
+  static GlobalKey<NavigatorState>? _navigatorKey;
 
   static String? get fcmToken => _fcmToken;
+
+  static set navigatorKey(GlobalKey<NavigatorState> key) {
+    _navigatorKey = key;
+  }
 
   /// Creates the Android notification channel. Call once in main() before runApp.
   static Future<void> createNotificationChannel() async {
@@ -41,12 +48,15 @@ class NotificationService {
     if (_initialized) return true;
     _initialized = true;
 
-    // Init flutter_local_notifications
+    // Init flutter_local_notifications with tap callback
     const initSettings = InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       iOS: DarwinInitializationSettings(),
     );
-    await _localNotifications.initialize(initSettings);
+    await _localNotifications.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: _onLocalNotificationTap,
+    );
 
     // Request permission
     final settings = await _messaging.requestPermission(
@@ -73,6 +83,40 @@ class NotificationService {
     FirebaseMessaging.onMessage.listen(_showForegroundNotification);
 
     return true;
+  }
+
+  /// Call when the app is opened from a terminated state via notification tap.
+  static void handleInitialMessage(RemoteMessage message) {
+    final sessionId = message.data['sessionId'] as String?;
+    if (sessionId != null && sessionId.isNotEmpty) {
+      // Delay until the navigator is ready after the first frame.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _navigateToSession(sessionId);
+      });
+    }
+  }
+
+  /// Call when the app is in the background and the user taps a notification.
+  static void handleFcmTap(RemoteMessage message) {
+    final sessionId = message.data['sessionId'] as String?;
+    if (sessionId != null && sessionId.isNotEmpty) {
+      _navigateToSession(sessionId);
+    }
+  }
+
+  static void _onLocalNotificationTap(NotificationResponse response) {
+    final sessionId = response.payload;
+    if (sessionId != null && sessionId.isNotEmpty) {
+      _navigateToSession(sessionId);
+    }
+  }
+
+  static void _navigateToSession(String sessionId) {
+    final nav = _navigatorKey?.currentState;
+    if (nav == null) return;
+    nav.push(MaterialPageRoute(
+      builder: (_) => SessionScreen(sessionId: sessionId),
+    ));
   }
 
   static Future<String?> _getFcmToken() async {
@@ -109,9 +153,11 @@ class NotificationService {
     }
   }
 
-  static Future<void> _showForegroundNotification(RemoteMessage message) async {
+  static Future<void> _showForegroundNotification(
+      RemoteMessage message) async {
     final notification = message.notification;
     if (notification == null) return;
+    final sessionId = message.data['sessionId'] as String?;
     await _localNotifications.show(
       notification.hashCode,
       notification.title,
@@ -125,6 +171,7 @@ class NotificationService {
         ),
         iOS: DarwinNotificationDetails(),
       ),
+      payload: sessionId,
     );
   }
 

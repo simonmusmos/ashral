@@ -72,4 +72,61 @@ class SessionService {
     }
   }
 
+  static Future<Map<String, dynamic>> getSessionDetail(
+      String sessionId) async {
+    final userId = UserService.instance.userId;
+    final response = await http.get(
+      Uri.parse('$kBackendUrl/sessions/$sessionId?userId=$userId'),
+      headers: {'Content-Type': 'application/json'},
+    );
+    debugPrint(
+        'SessionService.getSessionDetail: ${response.statusCode} → ${response.body}');
+    if (response.statusCode != 200) {
+      throw Exception('Server returned ${response.statusCode}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    // Accept both { "session": {...} } and the object directly
+    return (body['session'] as Map<String, dynamic>?) ?? body;
+  }
+
+  static Future<List<Map<String, dynamic>>> fetchSessionOutput(
+      String sessionId, {
+    int limit = 200,
+  }) async {
+    final response = await http.get(
+      Uri.parse('$kBackendUrl/sessions/$sessionId/output?limit=$limit'),
+      headers: {'Content-Type': 'application/json'},
+    );
+    debugPrint(
+        'SessionService.fetchSessionOutput: ${response.statusCode} → ${response.body.length} bytes');
+    if (response.statusCode == 404) {
+      final body = jsonDecode(response.body) as Map<String, dynamic>?;
+      final code = body?['code'] as String?;
+      if (code == 'SESSION_EXPIRED') throw Exception('Session expired');
+      throw Exception('Session not found');
+    }
+    if (response.statusCode != 200) {
+      throw Exception('Server returned ${response.statusCode}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final chunks = body['chunks'] as List<dynamic>? ?? [];
+    return chunks.cast<Map<String, dynamic>>();
+  }
+
+  static Future<void> respondToAction({
+    required String sessionId,
+    required String action,
+  }) async {
+    final userId = UserService.instance.userId;
+    final response = await http.post(
+      Uri.parse('$kBackendUrl/sessions/$sessionId/respond'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'userId': userId, 'action': action}),
+    );
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      throw Exception(
+          'Server returned ${response.statusCode}: ${response.body}');
+    }
+  }
+
 }

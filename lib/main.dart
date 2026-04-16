@@ -123,14 +123,37 @@ ThemeData _buildTheme() {
   );
 }
 
-class AshralApp extends StatelessWidget {
+class AshralApp extends StatefulWidget {
   const AshralApp({super.key});
+
+  @override
+  State<AshralApp> createState() => _AshralAppState();
+}
+
+class _AshralAppState extends State<AshralApp> {
+  final _navigatorKey = GlobalKey<NavigatorState>();
+
+  @override
+  void initState() {
+    super.initState();
+    NotificationService.navigatorKey = _navigatorKey;
+
+    // App opened from a terminated state by tapping a notification
+    FirebaseMessaging.instance.getInitialMessage().then((message) {
+      if (message != null) NotificationService.handleInitialMessage(message);
+    });
+
+    // App in background, user taps notification
+    FirebaseMessaging.onMessageOpenedApp
+        .listen(NotificationService.handleFcmTap);
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Ashral',
       debugShowCheckedModeBanner: false,
+      navigatorKey: _navigatorKey,
       theme: _buildTheme(),
       home: StreamBuilder(
         stream: AuthService.authStateChanges,

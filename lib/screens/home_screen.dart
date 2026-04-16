@@ -7,7 +7,9 @@ import '../services/auth_service.dart';
 import '../services/notification_service.dart';
 import '../services/session_service.dart';
 import '../widgets/session_card.dart';
+import 'agent_output_screen.dart';
 import 'qr_scanner_screen.dart';
+import 'session_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -390,6 +392,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   onLeave: () => _leaveSession(sessionId),
                   onRename: (customName) =>
                       _renameSession(sessionId, customName),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AgentOutputScreen(
+                        sessionId: sessionId,
+                        sessionMeta: session,
+                      ),
+                    ),
+                  ),
                 );
               },
             ),
