@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../services/session_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/session_card.dart';
 
 class SessionScreen extends StatefulWidget {
@@ -62,8 +62,7 @@ class _SessionScreenState extends State<SessionScreen> {
     _refreshTimer?.cancel();
     final status = (detail['status'] as String? ?? '').toLowerCase();
     final hasPending = detail['pendingAction'] != null;
-    final isActive =
-        hasPending || status == 'running' || status == 'active';
+    final isActive = hasPending || status == 'running' || status == 'active';
     if (isActive) {
       _refreshTimer = Timer(const Duration(seconds: 8), _load);
     }
@@ -80,15 +79,12 @@ class _SessionScreenState extends State<SessionScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-            'Failed: $e',
-            style: GoogleFonts.plusJakartaSans(
-                fontSize: 13, color: const Color(0xFFF2F2F2)),
-          ),
-          backgroundColor: const Color(0xFF1E0A0A),
+          content: Text('Failed: $e',
+              style: AppText.ui(size: 13, color: AppColors.textPrimary)),
+          backgroundColor: AppColors.errorBg,
           behavior: SnackBarBehavior.floating,
           shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ));
       }
     } finally {
@@ -143,41 +139,6 @@ class _SessionScreenState extends State<SessionScreen> {
     return null;
   }
 
-  // ── Status helpers ────────────────────────────────────────────────────────
-
-  static ({Color dot, Color bg, Color text}) _statusColors(String status) {
-    switch (status.toLowerCase()) {
-      case 'running':
-      case 'active':
-        return (
-          dot: const Color(0xFF22C55E),
-          bg: const Color(0xFF0D2016),
-          text: const Color(0xFF4ADE80),
-        );
-      case 'waiting':
-      case 'pending':
-      case 'paused':
-        return (
-          dot: const Color(0xFFF59E0B),
-          bg: const Color(0xFF1C1500),
-          text: const Color(0xFFFBBF24),
-        );
-      case 'error':
-      case 'failed':
-        return (
-          dot: const Color(0xFFEF4444),
-          bg: const Color(0xFF1E0A0A),
-          text: const Color(0xFFF87171),
-        );
-      default:
-        return (
-          dot: const Color(0xFF4A4A4A),
-          bg: const Color(0xFF161616),
-          text: const Color(0xFF6B7280),
-        );
-    }
-  }
-
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
@@ -186,28 +147,24 @@ class _SessionScreenState extends State<SessionScreen> {
     final hasPending = pending != null;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF090909),
+      backgroundColor: AppColors.bgDeep,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF090909),
+        backgroundColor: AppColors.bgDeep,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 16),
-          color: const Color(0xFF5C5C5C),
+          color: AppColors.textSecondary,
           onPressed: () => Navigator.pop(context),
         ),
         titleSpacing: 0,
         title: Row(
           children: [
-            AgentBadge(agent: _agentName),
+            AgentBadge(agent: _agentName, size: 30),
             const SizedBox(width: 2),
             Expanded(
               child: Text(
                 _displayName,
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFFF2F2F2),
-                ),
+                style: AppText.ui(size: 15, weight: FontWeight.w600),
               ),
             ),
           ],
@@ -215,7 +172,7 @@ class _SessionScreenState extends State<SessionScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded, size: 18),
-            color: const Color(0xFF4A4A4A),
+            color: AppColors.textMuted,
             tooltip: 'Refresh',
             onPressed: _load,
             visualDensity: VisualDensity.compact,
@@ -224,13 +181,13 @@ class _SessionScreenState extends State<SessionScreen> {
         ],
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: Color(0xFF181818)),
+          child: Divider(height: 1, color: AppColors.borderSubtle),
         ),
       ),
       body: _loading
           ? const Center(
               child: CircularProgressIndicator(
-                color: Color(0xFF333333),
+                color: AppColors.textMuted,
                 strokeWidth: 1.5,
               ),
             )
@@ -253,29 +210,26 @@ class _SessionScreenState extends State<SessionScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(Icons.cloud_off_outlined,
-                size: 36, color: Color(0xFF2A2A2A)),
+                size: 36, color: AppColors.textMuted),
             const SizedBox(height: 14),
             Text(
               'Could not load session',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF5C5C5C),
-              ),
+              style: AppText.ui(
+                  size: 14,
+                  weight: FontWeight.w600,
+                  color: AppColors.textSecondary),
             ),
             const SizedBox(height: 6),
             Text(
               _error!,
               textAlign: TextAlign.center,
-              style: GoogleFonts.plusJakartaSans(
-                  fontSize: 12, color: const Color(0xFF333333)),
+              style: AppText.ui(size: 12, color: AppColors.textMuted),
             ),
             const SizedBox(height: 20),
             OutlinedButton(
               onPressed: _load,
               child: Text('Try again',
-                  style: GoogleFonts.plusJakartaSans(
-                      fontSize: 13, fontWeight: FontWeight.w500)),
+                  style: AppText.ui(size: 13, weight: FontWeight.w500)),
             ),
           ],
         ),
@@ -308,7 +262,7 @@ class _SessionScreenState extends State<SessionScreen> {
             label: 'TERMINAL',
             trailing: IconButton(
               icon: const Icon(Icons.copy_rounded, size: 14),
-              color: const Color(0xFF3A3A3A),
+              color: AppColors.textMuted,
               tooltip: 'Copy output',
               visualDensity: VisualDensity.compact,
               onPressed: () {
@@ -316,13 +270,13 @@ class _SessionScreenState extends State<SessionScreen> {
                     ClipboardData(text: _terminalLines.join('\n')));
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                   content: Text('Copied',
-                      style: GoogleFonts.plusJakartaSans(
-                          fontSize: 13, color: const Color(0xFFF2F2F2))),
-                  backgroundColor: const Color(0xFF181818),
+                      style:
+                          AppText.ui(size: 13, color: AppColors.textPrimary)),
+                  backgroundColor: AppColors.bgElevated,
                   behavior: SnackBarBehavior.floating,
                   duration: const Duration(seconds: 2),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
+                      borderRadius: BorderRadius.circular(10)),
                 ));
               },
             ),
@@ -347,34 +301,39 @@ class _SessionScreenState extends State<SessionScreen> {
   }
 
   Widget _buildStatusChip(String status) {
-    final colors = _statusColors(status);
+    final palette = AppStatus.palette(status);
+    final isLive = AppStatus.isLive(status);
     return Row(
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: colors.bg,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: colors.dot.withValues(alpha: 0.3)),
+            color: palette.bg,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: palette.border),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: colors.dot,
-                  shape: BoxShape.circle,
+              if (isLive)
+                _PulsingDot(color: palette.dot)
+              else
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: palette.dot,
+                    shape: BoxShape.circle,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 7),
+              const SizedBox(width: 8),
               Text(
                 status,
-                style: GoogleFonts.ibmPlexMono(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: colors.text,
+                style: AppText.mono(
+                  size: 11,
+                  weight: FontWeight.w500,
+                  color: palette.text,
                   letterSpacing: 0.3,
                 ),
               ),
@@ -395,22 +354,14 @@ class _SessionScreenState extends State<SessionScreen> {
       children: [
         Row(
           children: [
-            Text(
-              label,
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF3A3A3A),
-                letterSpacing: 1.5,
-              ),
-            ),
+            Text(label, style: AppText.sectionLabel()),
             if (trailing != null) ...[
               const Spacer(),
               trailing,
             ],
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         child,
       ],
     );
@@ -419,41 +370,37 @@ class _SessionScreenState extends State<SessionScreen> {
   Widget _buildMessageBox(String message) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF111111),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF1E1E1E)),
+        color: AppColors.bgBase,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
       ),
       child: Text(
         message,
-        style: GoogleFonts.plusJakartaSans(
-          fontSize: 13,
-          height: 1.55,
-          color: const Color(0xFFD4D4D4),
-        ),
+        style: AppText.ui(size: 14, height: 1.6, color: AppColors.textPrimary),
       ),
     );
   }
 
   Widget _buildTerminalBox(List<String> lines) {
-    // Show last 30 lines to keep the view tight
-    final visible = lines.length > 30 ? lines.sublist(lines.length - 30) : lines;
+    final visible =
+        lines.length > 30 ? lines.sublist(lines.length - 30) : lines;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF0A0A0A),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF1A1A1A)),
+        color: AppColors.bgElevated,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: visible
             .map((line) => Text(
                   line,
-                  style: GoogleFonts.ibmPlexMono(
-                    fontSize: 11,
+                  style: AppText.mono(
+                    size: 11.5,
                     height: 1.6,
                     color: _terminalLineColor(line),
                   ),
@@ -465,19 +412,26 @@ class _SessionScreenState extends State<SessionScreen> {
 
   static Color _terminalLineColor(String line) {
     final l = line.trim();
-    if (l.startsWith('error') || l.startsWith('Error') || l.startsWith('ERR')) {
-      return const Color(0xFFF87171);
+    if (l.startsWith('error') ||
+        l.startsWith('Error') ||
+        l.startsWith('ERR')) {
+      return AppColors.terminalErr;
     }
-    if (l.startsWith('warn') || l.startsWith('Warn') || l.startsWith('WARN')) {
-      return const Color(0xFFFBBF24);
+    if (l.startsWith('warn') ||
+        l.startsWith('Warn') ||
+        l.startsWith('WARN')) {
+      return AppColors.terminalWarn;
     }
-    if (l.startsWith('\$') || l.startsWith('>')) {
-      return const Color(0xFF7DD3FC);
+    if (l.startsWith(r'$') || l.startsWith('>')) {
+      return AppColors.terminalCmd;
     }
-    if (l.startsWith('✓') || l.startsWith('✔') || l.startsWith('Done') || l.startsWith('SUCCESS')) {
-      return const Color(0xFF4ADE80);
+    if (l.startsWith('✓') ||
+        l.startsWith('✔') ||
+        l.startsWith('Done') ||
+        l.startsWith('SUCCESS')) {
+      return AppColors.terminalSuccess;
     }
-    return const Color(0xFF6B7280);
+    return AppColors.terminalText;
   }
 
   Widget _buildPendingActionBox(Map<String, dynamic> action) {
@@ -489,11 +443,11 @@ class _SessionScreenState extends State<SessionScreen> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1500),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF3D2E00)),
+        color: AppColors.waitingBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.waitingBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -501,22 +455,19 @@ class _SessionScreenState extends State<SessionScreen> {
           if (type.isNotEmpty) ...[
             Text(
               type.toUpperCase(),
-              style: GoogleFonts.ibmPlexMono(
-                fontSize: 9,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF78716C),
+              style: AppText.mono(
+                size: 10,
+                weight: FontWeight.w600,
+                color: AppColors.waiting.withValues(alpha: 0.6),
                 letterSpacing: 1.2,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
           ],
           Text(
             description,
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 13,
-              height: 1.5,
-              color: const Color(0xFFE7C97C),
-            ),
+            style: AppText.ui(
+                size: 14, height: 1.55, color: AppColors.waiting),
           ),
         ],
       ),
@@ -531,14 +482,11 @@ class _SessionScreenState extends State<SessionScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(Icons.hourglass_empty_rounded,
-                size: 28, color: Color(0xFF222222)),
+                size: 28, color: AppColors.textMuted),
             const SizedBox(height: 12),
             Text(
               'No activity yet',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 13,
-                color: const Color(0xFF383838),
-              ),
+              style: AppText.ui(size: 13, color: AppColors.textSecondary),
             ),
           ],
         ),
@@ -549,8 +497,6 @@ class _SessionScreenState extends State<SessionScreen> {
   Widget _buildActionBar(Map<String, dynamic> action) {
     final options = action['options'] as List<dynamic>?;
     final hasOptions = options != null && options.isNotEmpty;
-
-    // Determine button set: use explicit options if provided, else approve/deny
     final List<String> actions =
         hasOptions ? options.cast<String>() : ['deny', 'approve'];
 
@@ -560,8 +506,8 @@ class _SessionScreenState extends State<SessionScreen> {
       bottom: 0,
       child: Container(
         decoration: const BoxDecoration(
-          color: Color(0xFF090909),
-          border: Border(top: BorderSide(color: Color(0xFF1A1A1A))),
+          color: AppColors.bgDeep,
+          border: Border(top: BorderSide(color: AppColors.border)),
         ),
         padding: EdgeInsets.fromLTRB(
           20,
@@ -590,11 +536,11 @@ class _SessionScreenState extends State<SessionScreen> {
       return FilledButton(
         onPressed: _responding ? null : () => _respond(action),
         style: FilledButton.styleFrom(
-          backgroundColor: const Color(0xFFF2F2F2),
-          foregroundColor: const Color(0xFF090909),
-          minimumSize: const Size.fromHeight(50),
+          backgroundColor: AppColors.success,
+          foregroundColor: AppColors.bgDeep,
+          minimumSize: const Size.fromHeight(52),
           shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
         child: _responding
             ? const SizedBox(
@@ -602,26 +548,77 @@ class _SessionScreenState extends State<SessionScreen> {
                 height: 16,
                 child: CircularProgressIndicator(
                   strokeWidth: 1.5,
-                  color: Color(0xFF090909),
+                  color: AppColors.bgDeep,
                 ),
               )
             : Text(label,
-                style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14, fontWeight: FontWeight.w600)),
+                style: AppText.ui(
+                    size: 14,
+                    weight: FontWeight.w600,
+                    color: AppColors.bgDeep)),
       );
     }
 
     return OutlinedButton(
       onPressed: _responding ? null : () => _respond(action),
       style: OutlinedButton.styleFrom(
-        foregroundColor: const Color(0xFFEF4444),
-        side: const BorderSide(color: Color(0xFF2A0A0A)),
-        minimumSize: const Size.fromHeight(50),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        foregroundColor: AppColors.error.withValues(alpha: 0.8),
+        side: BorderSide(color: AppColors.error.withValues(alpha: 0.3)),
+        minimumSize: const Size.fromHeight(52),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       child: Text(label,
-          style: GoogleFonts.plusJakartaSans(
-              fontSize: 14, fontWeight: FontWeight.w500)),
+          style: AppText.ui(size: 14, weight: FontWeight.w500)),
+    );
+  }
+}
+
+// ── Pulsing dot ────────────────────────────────────────────────────────────────
+
+class _PulsingDot extends StatefulWidget {
+  final Color color;
+  const _PulsingDot({required this.color});
+
+  @override
+  State<_PulsingDot> createState() => _PulsingDotState();
+}
+
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+    _anim = Tween<double>(begin: 0.25, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _anim,
+      child: Container(
+        width: 6,
+        height: 6,
+        decoration: BoxDecoration(
+          color: widget.color,
+          shape: BoxShape.circle,
+        ),
+      ),
     );
   }
 }

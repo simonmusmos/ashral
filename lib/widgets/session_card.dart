@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
+import '../theme/app_theme.dart';
 
 class SessionCard extends StatefulWidget {
   final Map<String, dynamic> session;
@@ -32,6 +33,10 @@ class _SessionCardState extends State<SessionCard> {
         '—';
   }
 
+  String _status() {
+    return (widget.session['status'] as String? ?? '').toLowerCase();
+  }
+
   Future<void> _handleLeave() async {
     setState(() => _leaving = true);
     try {
@@ -48,17 +53,17 @@ class _SessionCardState extends State<SessionCard> {
     final result = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF111111),
+      backgroundColor: AppColors.bgBase,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-        side: BorderSide(color: Color(0xFF222222)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        side: BorderSide(color: AppColors.border),
       ),
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(
           left: 24,
           right: 24,
           top: 24,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 28,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 32,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -66,31 +71,19 @@ class _SessionCardState extends State<SessionCard> {
           children: [
             Text(
               'Rename session',
-              style: GoogleFonts.bricolageGrotesque(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFFF2F2F2),
-                letterSpacing: -0.3,
-              ),
+              style: AppText.display(size: 18),
             ),
             const SizedBox(height: 4),
             Text(
               'Leave empty to reset to the default name.',
-              style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13, color: const Color(0xFF4A4A4A)),
+              style: AppText.ui(size: 13, color: AppColors.textMuted),
             ),
             const SizedBox(height: 20),
             TextField(
               controller: controller,
               autofocus: true,
               textCapitalization: TextCapitalization.sentences,
-              style: GoogleFonts.plusJakartaSans(
-                  fontSize: 14, color: const Color(0xFFF2F2F2)),
-              decoration: InputDecoration(
-                hintText: 'Session name…',
-                hintStyle: GoogleFonts.plusJakartaSans(
-                    fontSize: 14, color: const Color(0xFF333333)),
-              ),
+              style: AppText.ui(size: 14),
               onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
             ),
             const SizedBox(height: 16),
@@ -99,23 +92,14 @@ class _SessionCardState extends State<SessionCard> {
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => Navigator.pop(ctx, null),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFF222222)),
-                      foregroundColor: const Color(0xFF5C5C5C),
-                    ),
-                    child: Text('Cancel',
-                        style:
-                            GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w500)),
+                    child: Text('Cancel', style: AppText.ui(size: 14, weight: FontWeight.w500)),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton(
-                    onPressed: () =>
-                        Navigator.pop(ctx, controller.text.trim()),
-                    child: Text('Save',
-                        style:
-                            GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600)),
+                    onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+                    child: Text('Save', style: AppText.ui(size: 14, weight: FontWeight.w600, color: AppColors.bgDeep)),
                   ),
                 ),
               ],
@@ -133,92 +117,140 @@ class _SessionCardState extends State<SessionCard> {
   @override
   Widget build(BuildContext context) {
     final agent = widget.session['agent'] as String? ?? '';
+    final status = _status();
+    final isLive = AppStatus.isLive(status);
+    final palette = status.isNotEmpty ? AppStatus.palette(status) : null;
 
-    return InkWell(
-      onTap: widget.onTap ?? _handleRename,
-      overlayColor: WidgetStateProperty.all(
-          const Color(0xFFF2F2F2).withValues(alpha: 0.03)),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-        decoration: const BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: Color(0xFF141414)),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: widget.onTap ?? _handleRename,
+        overlayColor: WidgetStateProperty.all(
+            AppColors.textPrimary.withValues(alpha: 0.03)),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: AppColors.borderSubtle),
+              // Subtle left accent for live sessions
+              left: isLive
+                  ? const BorderSide(color: AppColors.running, width: 2)
+                  : BorderSide.none,
+            ),
           ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // Agent logo badge
-            AgentBadge(agent: agent),
-
-            // Session info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _displayName(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFFE8E8E8),
-                    ),
-                  ),
-                  if (agent.isNotEmpty) ...[
-                    const SizedBox(height: 3),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              AgentBadge(agent: agent),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      agent,
-                      style: GoogleFonts.ibmPlexMono(
-                        fontSize: 11,
-                        color: const Color(0xFF3A3A3A),
-                        fontWeight: FontWeight.w400,
+                      _displayName(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppText.ui(
+                        size: 14,
+                        weight: FontWeight.w600,
+                        color: AppColors.textPrimary,
                       ),
                     ),
-                  ],
-                ],
-              ),
-            ),
-
-            // Leave action
-            const SizedBox(width: 16),
-            _leaving
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 1.5,
-                      color: Color(0xFF333333),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        if (agent.isNotEmpty) ...[
+                          Text(
+                            agent,
+                            style: AppText.mono(
+                              size: 11,
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                        ],
+                        if (palette != null) ...[
+                          if (agent.isNotEmpty) const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: palette.bg,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (isLive)
+                                  _PulsingDot(color: palette.dot, size: 5)
+                                else
+                                  Container(
+                                    width: 5,
+                                    height: 5,
+                                    decoration: BoxDecoration(
+                                      color: palette.dot,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  status,
+                                  style: AppText.mono(
+                                    size: 10,
+                                    weight: FontWeight.w500,
+                                    color: palette.text,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                  )
-                : GestureDetector(
-                    onTap: _handleLeave,
-                    behavior: HitTestBehavior.opaque,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 4, horizontal: 2),
-                      child: Text(
-                        'Leave',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: const Color(0xFFEF4444),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              _leaving
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        color: AppColors.textMuted,
+                      ),
+                    )
+                  : GestureDetector(
+                      onTap: _handleLeave,
+                      behavior: HitTestBehavior.opaque,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 6, horizontal: 4),
+                        child: Text(
+                          'Leave',
+                          style: AppText.ui(
+                            size: 12,
+                            weight: FontWeight.w500,
+                            color: AppColors.error.withValues(alpha: 0.7),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
+// ── Agent badge ────────────────────────────────────────────────────────────────
+
 class AgentBadge extends StatelessWidget {
   final String agent;
+  final double size;
 
-  const AgentBadge({super.key, required this.agent});
+  const AgentBadge({super.key, required this.agent, this.size = 36});
 
   static String? _assetPath(String agent) {
     final n = agent.toLowerCase();
@@ -243,34 +275,86 @@ class AgentBadge extends StatelessWidget {
       return (bg: const Color(0xFF1D9BF0), label: 'xAI');
     }
     final label = agent.isNotEmpty ? agent[0].toUpperCase() : '?';
-    return (bg: const Color(0xFF2A2A2A), label: label);
+    return (bg: AppColors.bgElevated, label: label);
   }
 
   @override
   Widget build(BuildContext context) {
     final path = _assetPath(agent);
+    final radius = size * 0.28;
     return Container(
-      width: 30,
-      height: 30,
+      width: size,
+      height: size,
       margin: const EdgeInsets.only(right: 14),
       decoration: BoxDecoration(
-        color: path != null ? Colors.transparent : _fallback(agent).bg,
-        borderRadius: BorderRadius.circular(7),
+        color: path != null ? AppColors.bgElevated : _fallback(agent).bg,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: AppColors.border),
       ),
       clipBehavior: Clip.antiAlias,
       child: path != null
-          ? Image.asset(path, width: 30, height: 30, fit: BoxFit.contain)
+          ? Image.asset(path, width: size, height: size, fit: BoxFit.contain)
           : Center(
               child: Text(
                 _fallback(agent).label,
-                style: GoogleFonts.ibmPlexMono(
-                  fontSize: _fallback(agent).label.length > 1 ? 9 : 12,
-                  fontWeight: FontWeight.w700,
+                style: AppText.mono(
+                  size: _fallback(agent).label.length > 1 ? 9 : 13,
+                  weight: FontWeight.w700,
                   color: Colors.white,
                   letterSpacing: -0.3,
                 ),
               ),
             ),
+    );
+  }
+}
+
+// ── Pulsing dot ────────────────────────────────────────────────────────────────
+
+class _PulsingDot extends StatefulWidget {
+  final Color color;
+  final double size;
+  const _PulsingDot({required this.color, this.size = 6});
+
+  @override
+  State<_PulsingDot> createState() => _PulsingDotState();
+}
+
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+    _anim = Tween<double>(begin: 0.25, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _anim,
+      child: Container(
+        width: widget.size,
+        height: widget.size,
+        decoration: BoxDecoration(
+          color: widget.color,
+          shape: BoxShape.circle,
+        ),
+      ),
     );
   }
 }

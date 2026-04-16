@@ -1,15 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../services/auth_service.dart';
 import '../services/notification_service.dart';
 import '../services/session_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/session_card.dart';
 import 'agent_output_screen.dart';
 import 'qr_scanner_screen.dart';
-import 'session_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -60,12 +59,10 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Connected to session',
-              style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13, color: const Color(0xFFF2F2F2))),
-          backgroundColor: const Color(0xFF181818),
+              style: AppText.ui(size: 13, color: AppColors.textPrimary)),
+          backgroundColor: AppColors.bgElevated,
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
       _loadSessions();
@@ -81,12 +78,11 @@ class _HomeScreenState extends State<HomeScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to leave: $e',
-                style: GoogleFonts.plusJakartaSans(
-                    fontSize: 13, color: const Color(0xFFF2F2F2))),
-            backgroundColor: const Color(0xFF1E0A0A),
+                style: AppText.ui(size: 13, color: AppColors.textPrimary)),
+            backgroundColor: AppColors.errorBg,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
       }
@@ -109,7 +105,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to rename: $e',
-                style: GoogleFonts.plusJakartaSans(fontSize: 13)),
+                style: AppText.ui(size: 13)),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -122,7 +118,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final user = AuthService.currentUser;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF090909),
+      backgroundColor: AppColors.bgDeep,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -143,43 +139,35 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 14, 18),
+          padding: const EdgeInsets.fromLTRB(20, 18, 12, 18),
           child: Row(
             children: [
               Text(
                 'Ashral',
-                style: GoogleFonts.bricolageGrotesque(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFFF2F2F2),
-                  letterSpacing: -0.5,
-                ),
+                style: AppText.display(size: 18, letterSpacing: -0.5),
               ),
               const Spacer(),
               if (email != null)
                 Flexible(
                   child: Padding(
-                    padding: const EdgeInsets.only(right: 2),
+                    padding: const EdgeInsets.only(right: 4),
                     child: Text(
                       email,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 12,
-                        color: const Color(0xFF3A3A3A),
-                      ),
+                      style: AppText.mono(size: 11, color: AppColors.textMuted),
                     ),
                   ),
                 ),
               IconButton(
                 icon: const Icon(Icons.refresh_rounded, size: 18),
-                color: const Color(0xFF4A4A4A),
+                color: AppColors.textMuted,
                 tooltip: 'Refresh',
                 onPressed: _loadSessions,
                 visualDensity: VisualDensity.compact,
               ),
               IconButton(
                 icon: const Icon(Icons.logout_rounded, size: 18),
-                color: const Color(0xFF4A4A4A),
+                color: AppColors.textMuted,
                 tooltip: 'Sign out',
                 onPressed: () {
                   NotificationService.reset();
@@ -190,37 +178,38 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
-        const Divider(height: 1, color: Color(0xFF181818)),
+        const Divider(height: 1, color: AppColors.borderSubtle),
       ],
     );
   }
 
   Widget _buildNotifBanner() {
     return Container(
-      color: const Color(0xFF0F0D00),
+      color: AppColors.waitingBg,
       padding: const EdgeInsets.fromLTRB(20, 10, 12, 10),
       child: Row(
         children: [
           const Icon(Icons.notifications_off_outlined,
-              size: 14, color: Color(0xFF666633)),
+              size: 14, color: AppColors.waiting),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               'Notifications disabled — enable in Settings for agent alerts.',
-              style: GoogleFonts.plusJakartaSans(
-                  fontSize: 12, color: const Color(0xFF555533)),
+              style: AppText.ui(
+                  size: 12,
+                  color: AppColors.waiting.withValues(alpha: 0.7)),
             ),
           ),
           TextButton(
             onPressed: () => setState(() => _permissionDenied = false),
             style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFF888855),
+              foregroundColor: AppColors.waiting,
               padding: const EdgeInsets.symmetric(horizontal: 8),
               visualDensity: VisualDensity.compact,
             ),
             child: Text('Dismiss',
-                style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11, fontWeight: FontWeight.w600)),
+                style: AppText.ui(size: 11, weight: FontWeight.w600,
+                    color: AppColors.waiting)),
           ),
         ],
       ),
@@ -233,23 +222,23 @@ class _HomeScreenState extends State<HomeScreen> {
       child: GestureDetector(
         onTap: _openScanner,
         child: Container(
-          height: 58,
+          height: 54,
           decoration: BoxDecoration(
-            color: const Color(0xFFF2F2F2),
-            borderRadius: BorderRadius.circular(10),
+            color: AppColors.textPrimary,
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Icon(Icons.qr_code_scanner_rounded,
-                  size: 20, color: Color(0xFF090909)),
+                  size: 20, color: AppColors.bgDeep),
               const SizedBox(width: 10),
               Text(
                 'Scan QR Code',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF090909),
+                style: AppText.ui(
+                  size: 14,
+                  weight: FontWeight.w600,
+                  color: AppColors.bgDeep,
                 ),
               ),
             ],
@@ -263,7 +252,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_loadingSessions) {
       return const Center(
         child: CircularProgressIndicator(
-          color: Color(0xFF333333),
+          color: AppColors.textMuted,
           strokeWidth: 1.5,
         ),
       );
@@ -277,29 +266,27 @@ class _HomeScreenState extends State<HomeScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(Icons.cloud_off_outlined,
-                  size: 36, color: Color(0xFF2A2A2A)),
+                  size: 36, color: AppColors.textMuted),
               const SizedBox(height: 14),
               Text(
                 'Could not load sessions',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF5C5C5C),
+                style: AppText.ui(
+                  size: 14,
+                  weight: FontWeight.w600,
+                  color: AppColors.textSecondary,
                 ),
               ),
               const SizedBox(height: 6),
               Text(
                 _sessionsError!,
                 textAlign: TextAlign.center,
-                style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12, color: const Color(0xFF333333)),
+                style: AppText.ui(size: 12, color: AppColors.textMuted),
               ),
               const SizedBox(height: 20),
               OutlinedButton(
                 onPressed: _loadSessions,
                 child: Text('Try again',
-                    style: GoogleFonts.plusJakartaSans(
-                        fontSize: 13, fontWeight: FontWeight.w500)),
+                    style: AppText.ui(size: 13, weight: FontWeight.w500)),
               ),
             ],
           ),
@@ -313,21 +300,20 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(Icons.sensors_off_rounded,
-                size: 32, color: Color(0xFF222222)),
+                size: 32, color: AppColors.textMuted),
             const SizedBox(height: 16),
             Text(
               'No active sessions',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: const Color(0xFF383838),
+              style: AppText.ui(
+                size: 14,
+                weight: FontWeight.w500,
+                color: AppColors.textSecondary,
               ),
             ),
             const SizedBox(height: 5),
             Text(
               'Scan a QR code from your agent terminal',
-              style: GoogleFonts.plusJakartaSans(
-                  fontSize: 12, color: const Color(0xFF2A2A2A)),
+              style: AppText.ui(size: 12, color: AppColors.textMuted),
             ),
           ],
         ),
@@ -337,48 +323,34 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Section header
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
           child: Row(
             children: [
-              Text(
-                'SESSIONS',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF3A3A3A),
-                  letterSpacing: 1.5,
-                ),
-              ),
+              Text('SESSIONS', style: AppText.sectionLabel()),
               const SizedBox(width: 8),
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF161616),
+                  color: AppColors.bgElevated,
                   borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: const Color(0xFF222222)),
+                  border: Border.all(color: AppColors.border),
                 ),
                 child: Text(
                   '${_sessions.length}',
-                  style: GoogleFonts.ibmPlexMono(
-                    fontSize: 10,
-                    color: const Color(0xFF4A4A4A),
-                  ),
+                  style: AppText.mono(size: 10, color: AppColors.textMuted),
                 ),
               ),
             ],
           ),
         ),
-
         const SizedBox(height: 12),
-
         Expanded(
           child: RefreshIndicator(
             onRefresh: _loadSessions,
-            color: const Color(0xFFF2F2F2),
-            backgroundColor: const Color(0xFF161616),
+            color: AppColors.textPrimary,
+            backgroundColor: AppColors.bgElevated,
             child: ListView.builder(
               padding: EdgeInsets.zero,
               itemCount: _sessions.length,

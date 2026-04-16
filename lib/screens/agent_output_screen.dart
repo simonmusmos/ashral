@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../services/session_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/session_card.dart';
 
 class AgentOutputScreen extends StatefulWidget {
@@ -30,6 +30,8 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
   String? _error;
   Timer? _pollTimer;
   bool _autoScroll = true;
+  Map<String, dynamic>? _pendingAction;
+  bool _responding = false;
 
   @override
   void initState() {
@@ -57,9 +59,16 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
 
   Future<void> _poll() async {
     try {
-      final incoming =
-          await SessionService.fetchSessionOutput(widget.sessionId);
+      final results = await Future.wait([
+        SessionService.fetchSessionOutput(widget.sessionId),
+        SessionService.getSessionDetail(widget.sessionId)
+            .catchError((_) => <String, dynamic>{}),
+      ]);
+
       if (!mounted) return;
+
+      final incoming = results[0] as List<Map<String, dynamic>>;
+      final detail = results[1] as Map<String, dynamic>;
 
       bool added = false;
       for (final chunk in incoming) {
@@ -70,13 +79,19 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
         added = true;
       }
 
+      final rawAction = detail['pendingAction'];
+      final pendingAction =
+          rawAction is Map<String, dynamic> ? rawAction : null;
+
       setState(() {
         _initialLoading = false;
         _error = null;
+        if (!_responding) _pendingAction = pendingAction;
       });
 
       if (added && _autoScroll) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) => _scrollToBottom());
       }
     } catch (e) {
       if (!mounted) return;
@@ -86,9 +101,36 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
       });
     }
 
-    // Schedule next poll
     _pollTimer?.cancel();
     _pollTimer = Timer(const Duration(seconds: 3), _poll);
+  }
+
+  Future<void> _respond(String action) async {
+    _pollTimer?.cancel();
+    setState(() => _responding = true);
+    try {
+      await SessionService.respondToAction(
+        sessionId: widget.sessionId,
+        action: action,
+      );
+      if (mounted) setState(() => _pendingAction = null);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed: $e',
+              style: AppText.ui(size: 13, color: AppColors.textPrimary)),
+          backgroundColor: AppColors.errorBg,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _responding = false);
+        _pollTimer = Timer(const Duration(seconds: 2), _poll);
+      }
+    }
   }
 
   void _scrollToBottom() {
@@ -124,54 +166,12 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text('Output copied',
-          style: GoogleFonts.plusJakartaSans(
-              fontSize: 13, color: const Color(0xFFF2F2F2))),
-      backgroundColor: const Color(0xFF181818),
+          style: AppText.ui(size: 13, color: AppColors.textPrimary)),
+      backgroundColor: AppColors.bgElevated,
       behavior: SnackBarBehavior.floating,
       duration: const Duration(seconds: 2),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     ));
-  }
-
-  // ── Status colors ──────────────────────────────────────────────────────────
-
-  static ({Color dot, Color bg, Color text}) _statusColors(String status) {
-    switch (status.toLowerCase()) {
-      case 'running':
-      case 'active':
-        return (
-          dot: const Color(0xFF22C55E),
-          bg: const Color(0xFF0D2016),
-          text: const Color(0xFF4ADE80),
-        );
-      case 'waiting_for_input':
-      case 'waiting':
-      case 'pending':
-        return (
-          dot: const Color(0xFFF59E0B),
-          bg: const Color(0xFF1C1500),
-          text: const Color(0xFFFBBF24),
-        );
-      case 'completed':
-        return (
-          dot: const Color(0xFF6B7280),
-          bg: const Color(0xFF161616),
-          text: const Color(0xFF9CA3AF),
-        );
-      case 'error':
-      case 'failed':
-        return (
-          dot: const Color(0xFFEF4444),
-          bg: const Color(0xFF1E0A0A),
-          text: const Color(0xFFF87171),
-        );
-      default:
-        return (
-          dot: const Color(0xFF4A4A4A),
-          bg: const Color(0xFF161616),
-          text: const Color(0xFF6B7280),
-        );
-    }
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -179,28 +179,25 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF090909),
+      backgroundColor: AppColors.bgDeep,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF090909),
+        backgroundColor: AppColors.bgDeep,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 16),
-          color: const Color(0xFF5C5C5C),
+          color: AppColors.textSecondary,
           onPressed: () => Navigator.pop(context),
         ),
         titleSpacing: 0,
         title: Row(
           children: [
-            AgentBadge(agent: _agentName),
+            AgentBadge(agent: _agentName, size: 30),
             const SizedBox(width: 2),
             Expanded(
               child: Text(
                 _displayName,
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFFF2F2F2),
-                ),
+                style: AppText.ui(
+                    size: 15, weight: FontWeight.w600),
               ),
             ),
           ],
@@ -209,14 +206,14 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
           if (_chunks.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.copy_rounded, size: 17),
-              color: const Color(0xFF4A4A4A),
+              color: AppColors.textMuted,
               tooltip: 'Copy all output',
               onPressed: _copyAll,
               visualDensity: VisualDensity.compact,
             ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded, size: 18),
-            color: const Color(0xFF4A4A4A),
+            color: AppColors.textMuted,
             tooltip: 'Refresh',
             onPressed: () {
               _pollTimer?.cancel();
@@ -228,27 +225,32 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
         ],
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: Color(0xFF181818)),
+          child: Divider(height: 1, color: AppColors.borderSubtle),
         ),
       ),
       body: _initialLoading
           ? const Center(
               child: CircularProgressIndicator(
-                color: Color(0xFF333333),
+                color: AppColors.textMuted,
                 strokeWidth: 1.5,
               ),
             )
           : _error != null && _chunks.isEmpty
               ? _buildError()
-              : _buildOutput(),
+              : Stack(
+                  children: [
+                    _buildOutput(),
+                    if (_pendingAction != null) _buildActionBar(_pendingAction!),
+                  ],
+                ),
       floatingActionButton: !_autoScroll && _chunks.isNotEmpty
           ? FloatingActionButton.small(
               onPressed: () {
                 setState(() => _autoScroll = true);
                 _scrollToBottom();
               },
-              backgroundColor: const Color(0xFF1E1E1E),
-              foregroundColor: const Color(0xFF9CA3AF),
+              backgroundColor: AppColors.bgElevated,
+              foregroundColor: AppColors.textSecondary,
               elevation: 2,
               child: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
             )
@@ -264,22 +266,20 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(Icons.cloud_off_outlined,
-                size: 36, color: Color(0xFF2A2A2A)),
+                size: 36, color: AppColors.textMuted),
             const SizedBox(height: 14),
             Text(
               'Could not load output',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF5C5C5C),
-              ),
+              style: AppText.ui(
+                  size: 14,
+                  weight: FontWeight.w600,
+                  color: AppColors.textSecondary),
             ),
             const SizedBox(height: 6),
             Text(
               _error!,
               textAlign: TextAlign.center,
-              style: GoogleFonts.plusJakartaSans(
-                  fontSize: 12, color: const Color(0xFF333333)),
+              style: AppText.ui(size: 12, color: AppColors.textMuted),
             ),
             const SizedBox(height: 20),
             OutlinedButton(
@@ -292,8 +292,7 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
                 _poll();
               },
               child: Text('Try again',
-                  style: GoogleFonts.plusJakartaSans(
-                      fontSize: 13, fontWeight: FontWeight.w500)),
+                  style: AppText.ui(size: 13, weight: FontWeight.w500)),
             ),
           ],
         ),
@@ -306,53 +305,52 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
       children: [
         if (_status.isNotEmpty) _buildStatusBar(),
         Expanded(
-          child: _chunks.isEmpty
-              ? _buildEmptyState()
-              : _buildTerminal(),
+          child: _chunks.isEmpty ? _buildEmptyState() : _buildTerminal(),
         ),
       ],
     );
   }
 
   Widget _buildStatusBar() {
-    final colors = _statusColors(_status);
-    final isLive = _status == 'running' || _status == 'active';
+    final palette = AppStatus.palette(_status);
+    final isLive = AppStatus.isLive(_status);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFF141414))),
+        border: Border(bottom: BorderSide(color: AppColors.borderSubtle)),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: colors.bg,
+              color: palette.bg,
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: colors.dot.withValues(alpha: 0.3)),
+              border: Border.all(color: palette.border),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (isLive)
-                  _PulsingDot(color: colors.dot)
+                  _PulsingDot(color: palette.dot)
                 else
                   Container(
                     width: 6,
                     height: 6,
                     decoration: BoxDecoration(
-                      color: colors.dot,
+                      color: palette.dot,
                       shape: BoxShape.circle,
                     ),
                   ),
                 const SizedBox(width: 7),
                 Text(
                   _status,
-                  style: GoogleFonts.ibmPlexMono(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: colors.text,
+                  style: AppText.mono(
+                    size: 11,
+                    weight: FontWeight.w500,
+                    color: palette.text,
                     letterSpacing: 0.3,
                   ),
                 ),
@@ -362,10 +360,7 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
           const Spacer(),
           Text(
             '${_chunks.length} chunks',
-            style: GoogleFonts.ibmPlexMono(
-              fontSize: 10,
-              color: const Color(0xFF2A2A2A),
-            ),
+            style: AppText.mono(size: 10, color: AppColors.textMuted),
           ),
         ],
       ),
@@ -385,11 +380,11 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
 
         return Text(
           text,
-          style: GoogleFonts.ibmPlexMono(
-            fontSize: 11.5,
+          style: AppText.mono(
+            size: 11.5,
             height: 1.55,
             color: isStderr
-                ? const Color(0xFFF87171)
+                ? AppColors.terminalErr
                 : _outputLineColor(text),
           ),
         );
@@ -403,25 +398,25 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
         l.startsWith('Error') ||
         l.startsWith('ERR') ||
         l.startsWith('✗')) {
-      return const Color(0xFFF87171);
+      return AppColors.terminalErr;
     }
     if (l.startsWith('warn') ||
         l.startsWith('Warn') ||
         l.startsWith('WARN') ||
         l.startsWith('⚠')) {
-      return const Color(0xFFFBBF24);
+      return AppColors.terminalWarn;
     }
     if (l.startsWith(r'$') || l.startsWith('>') || l.startsWith('#')) {
-      return const Color(0xFF7DD3FC);
+      return AppColors.terminalCmd;
     }
     if (l.startsWith('✓') ||
         l.startsWith('✔') ||
         l.startsWith('Done') ||
         l.startsWith('SUCCESS') ||
         l.startsWith('Completed')) {
-      return const Color(0xFF4ADE80);
+      return AppColors.terminalSuccess;
     }
-    return const Color(0xFF8B8B8B);
+    return AppColors.terminalText;
   }
 
   Widget _buildEmptyState() {
@@ -429,26 +424,134 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.terminal_rounded, size: 28, color: Color(0xFF222222)),
+          const Icon(Icons.terminal_rounded,
+              size: 28, color: AppColors.textMuted),
           const SizedBox(height: 12),
           Text(
             'No output yet',
-            style: GoogleFonts.plusJakartaSans(
-                fontSize: 13, color: const Color(0xFF383838)),
+            style: AppText.ui(size: 13, color: AppColors.textSecondary),
           ),
           const SizedBox(height: 4),
           Text(
             'Polling every 3 seconds…',
-            style: GoogleFonts.plusJakartaSans(
-                fontSize: 11, color: const Color(0xFF2A2A2A)),
+            style: AppText.mono(size: 11, color: AppColors.textMuted),
           ),
         ],
       ),
     );
   }
+
+  // ── Action bar ─────────────────────────────────────────────────────────────
+
+  Widget _buildActionBar(Map<String, dynamic> action) {
+    final rawOptions = action['options'] as List<dynamic>?;
+    final options = rawOptions?.cast<String>() ?? ['approve', 'deny'];
+    final question = action['question'] as String?;
+
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.bgDeep,
+          border: Border(top: BorderSide(color: AppColors.border)),
+        ),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          MediaQuery.of(context).padding.bottom + 16,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (question != null && question.isNotEmpty) ...[
+              Text(
+                question,
+                style: AppText.ui(
+                    size: 13, height: 1.5, color: AppColors.textPrimary),
+              ),
+              const SizedBox(height: 12),
+            ],
+            ...List.generate((options.length / 2).ceil(), (rowIndex) {
+              final start = rowIndex * 2;
+              final end = (start + 2).clamp(0, options.length);
+              final rowOptions = options.sublist(start, end);
+              return Padding(
+                padding: EdgeInsets.only(top: rowIndex > 0 ? 8 : 0),
+                child: Row(
+                  children: [
+                    for (int i = 0; i < rowOptions.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 10),
+                      Expanded(
+                        child: _buildOptionButton(rowOptions[i]),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOptionButton(String option) {
+    final lower = option.toLowerCase().trim();
+    final isPositive = lower == 'approve' ||
+        lower == 'yes' ||
+        lower == 'allow' ||
+        lower.startsWith('1.');
+    final label = option.length > 40 ? '${option.substring(0, 38)}…' : option;
+
+    final match = RegExp(r'^(\d+)\.').firstMatch(option.trim());
+    final action = match != null ? match.group(1)! : option;
+
+    if (isPositive) {
+      return FilledButton(
+        onPressed: _responding ? null : () => _respond(action),
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.success,
+          foregroundColor: AppColors.bgDeep,
+          minimumSize: const Size.fromHeight(50),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        child: _responding
+            ? const SizedBox(
+                width: 15,
+                height: 15,
+                child: CircularProgressIndicator(
+                    strokeWidth: 1.5, color: AppColors.bgDeep),
+              )
+            : Text(label,
+                style: AppText.ui(
+                    size: 13,
+                    weight: FontWeight.w600,
+                    color: AppColors.bgDeep)),
+      );
+    }
+
+    return OutlinedButton(
+      onPressed: _responding ? null : () => _respond(action),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.textSecondary,
+        side: const BorderSide(color: AppColors.border),
+        minimumSize: const Size.fromHeight(50),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      child: Text(label,
+          style:
+              AppText.ui(size: 13, weight: FontWeight.w500)),
+    );
+  }
 }
 
-// ── Pulsing dot for live status ────────────────────────────────────────────
+// ── Pulsing dot ────────────────────────────────────────────────────────────────
 
 class _PulsingDot extends StatefulWidget {
   final Color color;
@@ -468,9 +571,11 @@ class _PulsingDotState extends State<_PulsingDot>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.3, end: 1.0).animate(_controller);
+    _anim = Tween<double>(begin: 0.25, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
   }
 
   @override
