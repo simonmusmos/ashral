@@ -162,6 +162,13 @@ abstract final class AppStatus {
           border: AppColors.errorBorder,
           text: AppColors.error,
         );
+      case 'terminated':
+        return (
+          dot: AppColors.textSecondary,
+          bg: AppColors.bgElevated,
+          border: AppColors.border,
+          text: AppColors.textSecondary,
+        );
       default:
         return (
           dot: AppColors.pending,

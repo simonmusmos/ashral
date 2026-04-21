@@ -43,6 +43,8 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Ashral uses the camera to scan QR codes from your agent terminal.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Ashral reads QR codes from photos you select.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

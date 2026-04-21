@@ -1,8 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../services/auth_service.dart';
+import '../theme/app_theme.dart';
 
 enum _AuthMode { signIn, signUp }
 
@@ -33,16 +33,15 @@ class _AuthScreenState extends State<AuthScreen>
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 500),
     );
-    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
+    _fadeAnim =
+        CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _slideAnim = Tween<Offset>(
       begin: const Offset(0, 0.04),
       end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOutCubic,
-    ));
+    ).animate(
+        CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic));
     _animController.forward();
   }
 
@@ -101,7 +100,7 @@ class _AuthScreenState extends State<AuthScreen>
     final isSignIn = _mode == _AuthMode.signIn;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF090909),
+      backgroundColor: AppColors.bgDeep,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -115,30 +114,12 @@ class _AuthScreenState extends State<AuthScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const SizedBox(height: 64),
+                      const SizedBox(height: 72),
 
                       // ── Wordmark ──────────────────────────────────
-                      Text(
-                        'Ashral',
-                        style: GoogleFonts.bricolageGrotesque(
-                          fontSize: 40,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFFF2F2F2),
-                          height: 1.0,
-                          letterSpacing: -1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'agent console',
-                        style: GoogleFonts.ibmPlexMono(
-                          fontSize: 12,
-                          color: const Color(0xFF3A3A3A),
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
+                      _buildWordmark(),
 
-                      const SizedBox(height: 48),
+                      const SizedBox(height: 52),
 
                       // ── Mode tabs ─────────────────────────────────
                       _ModeTabs(mode: _mode, onToggle: _toggleMode),
@@ -158,10 +139,7 @@ class _AuthScreenState extends State<AuthScreen>
                               keyboardType: TextInputType.emailAddress,
                               textInputAction: TextInputAction.next,
                               autocorrect: false,
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 14,
-                                color: const Color(0xFFF2F2F2),
-                              ),
+                              style: AppText.ui(size: 14),
                               decoration: const InputDecoration(
                                 hintText: 'you@example.com',
                               ),
@@ -183,10 +161,7 @@ class _AuthScreenState extends State<AuthScreen>
                               obscureText: _obscurePassword,
                               textInputAction: TextInputAction.done,
                               onFieldSubmitted: (_) => _submit(),
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 14,
-                                color: const Color(0xFFF2F2F2),
-                              ),
+                              style: AppText.ui(size: 14),
                               decoration: InputDecoration(
                                 hintText: '••••••••',
                                 suffixIcon: IconButton(
@@ -195,7 +170,7 @@ class _AuthScreenState extends State<AuthScreen>
                                         ? Icons.visibility_off_outlined
                                         : Icons.visibility_outlined,
                                     size: 17,
-                                    color: const Color(0xFF3A3A3A),
+                                    color: AppColors.textMuted,
                                   ),
                                   onPressed: () => setState(() =>
                                       _obscurePassword = !_obscurePassword),
@@ -238,20 +213,18 @@ class _AuthScreenState extends State<AuthScreen>
                             isSignIn
                                 ? "Don't have an account?"
                                 : 'Already have an account?',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 13,
-                              color: const Color(0xFF4A4A4A),
-                            ),
+                            style: AppText.ui(
+                                size: 13, color: AppColors.textMuted),
                           ),
                           const SizedBox(width: 5),
                           GestureDetector(
                             onTap: _toggleMode,
                             child: Text(
                               isSignIn ? 'Sign up' : 'Sign in',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 13,
-                                color: const Color(0xFFB0B0B0),
-                                fontWeight: FontWeight.w600,
+                              style: AppText.ui(
+                                size: 13,
+                                weight: FontWeight.w600,
+                                color: AppColors.textSecondary,
                               ),
                             ),
                           ),
@@ -269,9 +242,52 @@ class _AuthScreenState extends State<AuthScreen>
       ),
     );
   }
+
+  Widget _buildWordmark() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Logo mark — small terminal-style monogram
+        Container(
+          width: 44,
+          height: 44,
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color: AppColors.bgBase,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Center(
+            child: Text(
+              'A',
+              style: AppText.display(
+                size: 22,
+                weight: FontWeight.w700,
+                color: AppColors.ai,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+        ),
+        Text(
+          'Ashral',
+          style: AppText.display(
+            size: 38,
+            weight: FontWeight.w700,
+            letterSpacing: -1.5,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'agent console',
+          style: AppText.mono(size: 12, color: AppColors.textMuted),
+        ),
+      ],
+    );
+  }
 }
 
-// ── Wordmark ──────────────────────────────────────────────────────────────────
+// ── Field label ────────────────────────────────────────────────────────────────
 
 class _FieldLabel extends StatelessWidget {
   final String label;
@@ -279,15 +295,7 @@ class _FieldLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      label.toUpperCase(),
-      style: GoogleFonts.plusJakartaSans(
-        fontSize: 10,
-        fontWeight: FontWeight.w600,
-        color: const Color(0xFF4A4A4A),
-        letterSpacing: 1.2,
-      ),
-    );
+    return Text(label.toUpperCase(), style: AppText.sectionLabel());
   }
 }
 
@@ -336,21 +344,17 @@ class _Tab extends StatelessWidget {
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(
-              color: selected
-                  ? const Color(0xFFF2F2F2)
-                  : Colors.transparent,
+              color: selected ? AppColors.textPrimary : Colors.transparent,
               width: 1.5,
             ),
           ),
         ),
         child: AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 180),
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 15,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-            color: selected
-                ? const Color(0xFFF2F2F2)
-                : const Color(0xFF333333),
+          style: AppText.ui(
+            size: 15,
+            weight: selected ? FontWeight.w600 : FontWeight.w400,
+            color: selected ? AppColors.textPrimary : AppColors.textMuted,
           ),
           child: Text(label),
         ),
@@ -379,12 +383,12 @@ class _SubmitButton extends StatelessWidget {
       child: FilledButton(
         onPressed: isLoading ? null : onPressed,
         style: FilledButton.styleFrom(
-          backgroundColor: const Color(0xFFF2F2F2),
-          foregroundColor: const Color(0xFF090909),
-          disabledBackgroundColor: const Color(0xFF1E1E1E),
+          backgroundColor: AppColors.textPrimary,
+          foregroundColor: AppColors.bgDeep,
+          disabledBackgroundColor: AppColors.bgElevated,
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
         child: isLoading
@@ -393,15 +397,15 @@ class _SubmitButton extends StatelessWidget {
                 width: 18,
                 child: CircularProgressIndicator(
                   strokeWidth: 1.5,
-                  color: Color(0xFF444444),
+                  color: AppColors.textMuted,
                 ),
               )
             : Text(
                 label,
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF090909),
+                style: AppText.ui(
+                  size: 14,
+                  weight: FontWeight.w600,
+                  color: AppColors.bgDeep,
                 ),
               ),
       ),
@@ -420,27 +424,23 @@ class _ErrorBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF160808),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF2E1212)),
+        color: AppColors.errorBg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.errorBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Padding(
             padding: EdgeInsets.only(top: 1),
-            child: Icon(Icons.error_outline,
-                size: 14, color: Color(0xFFEF4444)),
+            child: Icon(Icons.error_outline, size: 15, color: AppColors.error),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 13,
-                color: const Color(0xFFEF4444),
-                height: 1.5,
-              ),
+              style: AppText.ui(
+                  size: 13, color: AppColors.error, height: 1.5),
             ),
           ),
         ],

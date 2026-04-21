@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../services/session_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/pulsing_dot.dart';
 import '../widgets/session_card.dart';
 
 class SessionScreen extends StatefulWidget {
@@ -25,7 +26,7 @@ class _SessionScreenState extends State<SessionScreen> {
   Map<String, dynamic>? _detail;
   bool _loading = true;
   String? _error;
-  bool _responding = false;
+  String? _respondingAction;
   Timer? _refreshTimer;
 
   @override
@@ -69,7 +70,7 @@ class _SessionScreenState extends State<SessionScreen> {
   }
 
   Future<void> _respond(String action) async {
-    setState(() => _responding = true);
+    setState(() => _respondingAction = action);
     try {
       await SessionService.respondToAction(
         sessionId: widget.sessionId,
@@ -88,7 +89,7 @@ class _SessionScreenState extends State<SessionScreen> {
         ));
       }
     } finally {
-      if (mounted) setState(() => _responding = false);
+      if (mounted) setState(() => _respondingAction = null);
     }
   }
 
@@ -139,12 +140,17 @@ class _SessionScreenState extends State<SessionScreen> {
     return null;
   }
 
+  String? get _agentSessionId =>
+      _detail?['agentSessionId'] as String?;
+
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final pending = _pendingAction;
-    final hasPending = pending != null;
+    // Only show the action bar when explicit options are provided.
+    final hasPending = pending != null &&
+        (pending['options'] as List?)?.isNotEmpty == true;
 
     return Scaffold(
       backgroundColor: AppColors.bgDeep,
@@ -284,10 +290,18 @@ class _SessionScreenState extends State<SessionScreen> {
           ),
           const SizedBox(height: 20),
         ],
-        if (_pendingAction != null) ...[
+        if (_pendingAction != null &&
+            (_pendingAction!['options'] as List?)?.isNotEmpty == true) ...[
           _buildSection(
             label: 'PENDING ACTION',
             child: _buildPendingActionBox(_pendingAction!),
+          ),
+        ],
+        if (_agentSessionId != null) ...[
+          const SizedBox(height: 20),
+          _buildSection(
+            label: 'RESUME',
+            child: _buildResumeBox(widget.sessionId),
           ),
         ],
         if (_detail != null &&
@@ -317,7 +331,7 @@ class _SessionScreenState extends State<SessionScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (isLive)
-                _PulsingDot(color: palette.dot)
+                PulsingDot(color: palette.dot)
               else
                 Container(
                   width: 6,
@@ -474,6 +488,49 @@ class _SessionScreenState extends State<SessionScreen> {
     );
   }
 
+  Widget _buildResumeBox(String ashralSessionId) {
+    final command = 'ashral resume $ashralSessionId';
+    return GestureDetector(
+      onTap: () {
+        Clipboard.setData(ClipboardData(text: command));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Command copied',
+              style: AppText.ui(size: 13, color: AppColors.textPrimary)),
+          backgroundColor: AppColors.bgElevated,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ));
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.bgElevated,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                command,
+                style: AppText.mono(
+                  size: 12,
+                  color: AppColors.terminalCmd,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Icon(Icons.copy_rounded, size: 14, color: AppColors.textMuted),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildEmptyState() {
     return Center(
       child: Padding(
@@ -531,92 +588,66 @@ class _SessionScreenState extends State<SessionScreen> {
     final isPositive =
         action == 'approve' || action == 'yes' || action == 'allow';
     final label = action[0].toUpperCase() + action.substring(1);
+    final isLoading = _respondingAction == action;
+    final isBusy = _respondingAction != null;
 
     if (isPositive) {
-      return FilledButton(
-        onPressed: _responding ? null : () => _respond(action),
-        style: FilledButton.styleFrom(
-          backgroundColor: AppColors.success,
-          foregroundColor: AppColors.bgDeep,
-          minimumSize: const Size.fromHeight(52),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      return IgnorePointer(
+        ignoring: isBusy,
+        child: Opacity(
+          opacity: isBusy && !isLoading ? 0.45 : 1.0,
+          child: FilledButton(
+            onPressed: () => _respond(action),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.success,
+              foregroundColor: AppColors.bgDeep,
+              minimumSize: const Size.fromHeight(52),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: isLoading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      color: AppColors.bgDeep,
+                    ),
+                  )
+                : Text(label,
+                    style: AppText.ui(
+                        size: 14,
+                        weight: FontWeight.w600,
+                        color: AppColors.bgDeep)),
+          ),
         ),
-        child: _responding
-            ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 1.5,
-                  color: AppColors.bgDeep,
-                ),
-              )
-            : Text(label,
-                style: AppText.ui(
-                    size: 14,
-                    weight: FontWeight.w600,
-                    color: AppColors.bgDeep)),
       );
     }
 
-    return OutlinedButton(
-      onPressed: _responding ? null : () => _respond(action),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: AppColors.error.withValues(alpha: 0.8),
-        side: BorderSide(color: AppColors.error.withValues(alpha: 0.3)),
-        minimumSize: const Size.fromHeight(52),
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      child: Text(label,
-          style: AppText.ui(size: 14, weight: FontWeight.w500)),
-    );
-  }
-}
-
-// ── Pulsing dot ────────────────────────────────────────────────────────────────
-
-class _PulsingDot extends StatefulWidget {
-  final Color color;
-  const _PulsingDot({required this.color});
-
-  @override
-  State<_PulsingDot> createState() => _PulsingDotState();
-}
-
-class _PulsingDotState extends State<_PulsingDot>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _anim;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    )..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.25, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _anim,
-      child: Container(
-        width: 6,
-        height: 6,
-        decoration: BoxDecoration(
-          color: widget.color,
-          shape: BoxShape.circle,
+    return IgnorePointer(
+      ignoring: isBusy,
+      child: Opacity(
+        opacity: isBusy && !isLoading ? 0.45 : 1.0,
+        child: OutlinedButton(
+          onPressed: () => _respond(action),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.error.withValues(alpha: 0.8),
+            side: BorderSide(color: AppColors.error.withValues(alpha: 0.3)),
+            minimumSize: const Size.fromHeight(52),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+          ),
+          child: isLoading
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    color: AppColors.textSecondary,
+                  ),
+                )
+              : Text(label,
+                  style: AppText.ui(size: 14, weight: FontWeight.w500)),
         ),
       ),
     );

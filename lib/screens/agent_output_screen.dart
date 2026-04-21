@@ -2,9 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 
 import '../services/session_service.dart';
+import '../services/usage_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/pulsing_dot.dart';
 import '../widgets/session_card.dart';
 
 class AgentOutputScreen extends StatefulWidget {
@@ -24,6 +27,7 @@ class AgentOutputScreen extends StatefulWidget {
 class _AgentOutputScreenState extends State<AgentOutputScreen> {
   final List<Map<String, dynamic>> _chunks = [];
   final Set<String> _seenIds = {};
+  final Set<String> _seenTexts = {};
   final ScrollController _scrollController = ScrollController();
 
   bool _initialLoading = true;
@@ -32,7 +36,7 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
   Timer? _elapsedTimer;
   bool _autoScroll = true;
   Map<String, dynamic>? _pendingAction;
-  bool _responding = false;
+  String? _respondingAction;
   Map<String, dynamic>? _sessionDetail;
   Duration _elapsed = Duration.zero;
 
@@ -102,6 +106,19 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
       for (final chunk in incoming) {
         final id = chunk['chunkId'] as String? ?? '';
         if (id.isNotEmpty && _seenIds.contains(id)) continue;
+
+        // Deduplicate notification-formatted chunks: strip leading emoji chars
+        // and skip if the same text was already shown (e.g. 🖥️-prefixed duplicates).
+        final rawText = chunk['text'] as String? ?? '';
+        final normalized = rawText
+            .replaceAll(RegExp(r'^[\u{1F300}-\u{1FAFF}\s]+', unicode: true), '')
+            .trim();
+        if (normalized.isNotEmpty && _seenTexts.contains(normalized)) {
+          if (id.isNotEmpty) _seenIds.add(id);
+          continue;
+        }
+        if (normalized.isNotEmpty) _seenTexts.add(normalized);
+
         if (id.isNotEmpty) _seenIds.add(id);
         _chunks.add(chunk);
         added = true;
@@ -123,8 +140,14 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
         _initialLoading = false;
         _error = null;
         _sessionDetail = detail.isNotEmpty ? detail : _sessionDetail;
-        if (!_responding) _pendingAction = pendingAction;
+        if (_respondingAction == null) _pendingAction = pendingAction;
       });
+
+      // Track cost for daily/weekly usage accounting
+      final cost = (detail['stats']?['cost'] as num?)?.toDouble();
+      if (cost != null && cost > 0) {
+        unawaited(UsageService.recordCost(widget.sessionId, cost));
+      }
 
       if (startedAt != null) _startElapsedTimer(startedAt);
 
@@ -146,7 +169,7 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
 
   Future<void> _respond(String action) async {
     _pollTimer?.cancel();
-    setState(() => _responding = true);
+    setState(() => _respondingAction = action);
     try {
       await SessionService.respondToAction(
         sessionId: widget.sessionId,
@@ -166,7 +189,7 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() => _responding = false);
+        setState(() => _respondingAction = null);
         _pollTimer = Timer(const Duration(seconds: 2), _poll);
       }
     }
@@ -211,6 +234,24 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
         '';
   }
 
+  Map<String, dynamic>? get _stats {
+    final s = _sessionDetail?['stats'];
+    if (s is Map<String, dynamic>) return s;
+    return null;
+  }
+
+  String _formatCount(int n) {
+    if (n >= 1000) return '${(n / 1000).toStringAsFixed(n >= 10000 ? 0 : 1)}k';
+    return '$n';
+  }
+
+  String _formatCost(double usd) {
+    if (usd == 0) return '\$0';
+    if (usd < 0.001) return '\$<0.001';
+    if (usd < 1) return '\$${usd.toStringAsFixed(3)}';
+    return '\$${usd.toStringAsFixed(2)}';
+  }
+
   void _copyAll() {
     final text = _chunks.map((c) => c['text'] as String? ?? '').join('');
     Clipboard.setData(ClipboardData(text: text));
@@ -229,7 +270,10 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
   @override
   Widget build(BuildContext context) {
     final bottomPad = MediaQuery.of(context).padding.bottom;
-    final hasPending = _pendingAction != null;
+    // Only show the action bar when explicit options are provided — conversational
+    // "waiting for input" (pendingAction with no options) is shown via the status chip.
+    final hasPending = _pendingAction != null &&
+        (_pendingAction!['options'] as List?)?.isNotEmpty == true;
 
     return Scaffold(
       backgroundColor: AppColors.bgDeep,
@@ -402,7 +446,7 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             if (isLive)
-                              _PulsingDot(color: palette.dot)
+                              PulsingDot(color: palette.dot)
                             else
                               Container(
                                 width: 6,
@@ -468,8 +512,49 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
               ],
             ),
           ),
+
+          // ── Stats row ──────────────────────────────────────────────────────
+          if (_stats != null) ...[
+            const SizedBox(height: 10),
+            _buildStatsRow(_stats!),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _buildStatsRow(Map<String, dynamic> stats) {
+    int parseInt(dynamic v) => (v as num?)?.toInt() ?? 0;
+    final costUsd = (stats['cost'] as num?)?.toDouble() ?? 0.0;
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(child: _AnimatedStatCard(
+              value: parseInt(stats['calls']),
+              label: 'CALLS',
+              color: AppColors.ai,
+              formatter: _formatCount,
+            )),
+            const SizedBox(width: 8),
+            Expanded(child: _AnimatedStatCard(
+              value: parseInt(stats['files']),
+              label: 'FILES',
+              color: AppColors.running,
+              formatter: _formatCount,
+            )),
+            const SizedBox(width: 8),
+            Expanded(child: _AnimatedStatCard(
+              value: parseInt(stats['tokens']),
+              label: 'TOKENS',
+              color: AppColors.textSecondary,
+              formatter: _formatCount,
+            )),
+          ],
+        ),
+        const SizedBox(height: 8),
+        _AnimatedCostCard(value: costUsd, formatter: _formatCost),
+      ],
     );
   }
 
@@ -480,96 +565,51 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
     return _buildTerminal();
   }
 
+  // Detect CLI/tool system messages that shouldn't appear as user/AI output.
+  static bool _isSystemChunk(String text) {
+    final t = text.trimLeft();
+    const prefixes = [
+      'Base directory for this skill:',
+      '<system-reminder>',
+      '<function_calls>',
+      '<?xml',
+      '### Skill:',
+      'The user stepped away',
+    ];
+    // Claude Code sub-agent task prompts contain "Prior knowledge:" — never user-typed
+    if (t.contains('Prior knowledge:')) return true;
+    if (prefixes.any((p) => t.startsWith(p))) return true;
+    // Skill guide rule-list format: - `rule-name` - description (Apple HIG)
+    final ruleLines =
+        RegExp(r"^- `[a-z][a-z0-9-]+` - ", multiLine: true).allMatches(text).length;
+    if (ruleLines >= 3) return true;
+    // Skill checklist review format: - [ ] description
+    final checkboxLines =
+        RegExp(r"^- \[ \]", multiLine: true).allMatches(text).length;
+    if (checkboxLines >= 4) return true;
+    // Skill path references that appear throughout the usage/script sections
+    if (text.contains('ui-ux-pro-max') ||
+        text.contains('design-system/MASTER.md') ||
+        RegExp(r'skills/[a-z][a-z0-9-]+/').hasMatch(text)) {
+      return true;
+    }
+    return false;
+  }
+
   Widget _buildTerminal() {
-    return Column(
-      children: [
-        // Terminal title bar
-        Container(
-          height: 36,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: AppColors.bgElevated,
-            border:
-                Border(bottom: BorderSide(color: AppColors.border)),
-          ),
-          child: Row(
-            children: [
-              // Traffic lights
-              _dot(const Color(0xFFFF5F57)),
-              const SizedBox(width: 6),
-              _dot(const Color(0xFFFFBD2E)),
-              const SizedBox(width: 6),
-              _dot(const Color(0xFF28C840)),
-              const SizedBox(width: 12),
-              Text(
-                _displayName,
-                style: AppText.mono(size: 11, color: AppColors.textMuted),
-              ),
-            ],
-          ),
-        ),
-
-        // Output lines
-        Expanded(
-          child: ListView.builder(
-            controller: _scrollController,
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 32),
-            itemCount: _chunks.length,
-            itemBuilder: (context, i) {
-              final chunk = _chunks[i];
-              final text = chunk['text'] as String? ?? '';
-              final stream = chunk['stream'] as String? ?? 'stdout';
-              final isStderr = stream == 'stderr';
-              return Text(
-                text,
-                style: AppText.mono(
-                  size: 12,
-                  height: 1.55,
-                  color: isStderr
-                      ? AppColors.terminalErr
-                      : _lineColor(text),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.fromLTRB(0, 8, 0, 32),
+      itemCount: _chunks.length,
+      itemBuilder: (context, i) {
+        final chunk = _chunks[i];
+        final text = (chunk['text'] as String? ?? '').trim();
+        if (text.isEmpty) return const SizedBox.shrink();
+        if (_isSystemChunk(text)) return const SizedBox.shrink();
+        final isUser = chunk['stream'] == 'stderr';
+        return isUser ? _UserMessage(text: text) : _AiMessage(text: text);
+      },
     );
-  }
-
-  static Widget _dot(Color color) {
-    return Container(
-      width: 10,
-      height: 10,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-    );
-  }
-
-  static Color _lineColor(String text) {
-    final l = text.trim();
-    if (l.startsWith('error') ||
-        l.startsWith('Error') ||
-        l.startsWith('ERR') ||
-        l.startsWith('✗')) {
-      return AppColors.terminalErr;
-    }
-    if (l.startsWith('warn') ||
-        l.startsWith('Warn') ||
-        l.startsWith('WARN') ||
-        l.startsWith('⚠')) {
-      return AppColors.terminalWarn;
-    }
-    if (l.startsWith(r'$') || l.startsWith('>') || l.startsWith('#')) {
-      return AppColors.terminalCmd;
-    }
-    if (l.startsWith('✓') ||
-        l.startsWith('✔') ||
-        l.startsWith('Done') ||
-        l.startsWith('SUCCESS') ||
-        l.startsWith('Completed')) {
-      return AppColors.terminalSuccess;
-    }
-    return AppColors.terminalText;
   }
 
   Widget _buildEmptyState() {
@@ -650,9 +690,21 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
       right: 0,
       bottom: 0,
       child: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.bgDeep,
-          border: Border(top: BorderSide(color: AppColors.border)),
+          border: Border(
+            top: BorderSide(
+              color: AppColors.waiting.withValues(alpha: 0.6),
+              width: 1.5,
+            ),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.waiting.withValues(alpha: 0.07),
+              blurRadius: 24,
+              offset: const Offset(0, -6),
+            ),
+          ],
         ),
         padding: EdgeInsets.fromLTRB(16, 14, 16, bottomPad + 16),
         child: Column(
@@ -662,14 +714,7 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
             // Pending action label
             Row(
               children: [
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: const BoxDecoration(
-                    color: AppColors.waiting,
-                    shape: BoxShape.circle,
-                  ),
-                ),
+                PulsingDot(color: AppColors.waiting, size: 6),
                 const SizedBox(width: 8),
                 Text(
                   'ACTION REQUIRED',
@@ -721,47 +766,485 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
     final match = RegExp(r'^(\d+)\.').firstMatch(option.trim());
     final action = match != null ? match.group(1)! : option;
 
+    final isLoading = _respondingAction == action;
+    final isBusy = _respondingAction != null;
+
     if (isPositive) {
-      return FilledButton(
-        onPressed: _responding ? null : () => _respond(action),
-        style: FilledButton.styleFrom(
-          backgroundColor: AppColors.success,
-          foregroundColor: AppColors.bgDeep,
-          minimumSize: const Size.fromHeight(50),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      return IgnorePointer(
+        ignoring: isBusy,
+        child: Opacity(
+          opacity: isBusy && !isLoading ? 0.45 : 1.0,
+          child: FilledButton(
+            onPressed: () => _respond(action),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.success,
+              foregroundColor: AppColors.bgDeep,
+              minimumSize: const Size.fromHeight(50),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: isLoading
+                ? const SizedBox(
+                    width: 15,
+                    height: 15,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 1.5, color: AppColors.bgDeep),
+                  )
+                : Text(label,
+                    style: AppText.ui(
+                        size: 14,
+                        weight: FontWeight.w600,
+                        color: AppColors.bgDeep)),
+          ),
         ),
-        child: _responding
-            ? const SizedBox(
-                width: 15,
-                height: 15,
-                child: CircularProgressIndicator(
-                    strokeWidth: 1.5, color: AppColors.bgDeep),
-              )
-            : Text(label,
-                style: AppText.ui(
-                    size: 14,
-                    weight: FontWeight.w600,
-                    color: AppColors.bgDeep)),
       );
     }
 
-    return OutlinedButton(
-      onPressed: _responding ? null : () => _respond(action),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: AppColors.textSecondary,
-        side: const BorderSide(color: AppColors.border),
-        minimumSize: const Size.fromHeight(50),
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    return IgnorePointer(
+      ignoring: isBusy,
+      child: Opacity(
+        opacity: isBusy && !isLoading ? 0.45 : 1.0,
+        child: OutlinedButton(
+          onPressed: () => _respond(action),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.textSecondary,
+            side: const BorderSide(color: AppColors.border),
+            minimumSize: const Size.fromHeight(50),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+          ),
+          child: isLoading
+              ? const SizedBox(
+                  width: 15,
+                  height: 15,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 1.5, color: AppColors.textSecondary),
+                )
+              : Text(label,
+                  style: AppText.ui(size: 14, weight: FontWeight.w500)),
+        ),
       ),
-      child: Text(label,
-          style: AppText.ui(size: 14, weight: FontWeight.w500)),
+    );
+  }
+}
+
+// ── Chat message widgets ───────────────────────────────────────────────────────
+
+class _UserMessage extends StatelessWidget {
+  final String text;
+  const _UserMessage({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 22,
+            height: 22,
+            margin: const EdgeInsets.only(top: 1, right: 10),
+            decoration: BoxDecoration(
+              color: AppColors.bgElevated,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: const Icon(Icons.person_rounded, size: 13, color: AppColors.textMuted),
+          ),
+          Expanded(
+            child: Text(
+              text,
+              style: AppText.ui(
+                size: 13,
+                height: 1.6,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AiMessage extends StatelessWidget {
+  final String text;
+  const _AiMessage({required this.text});
+
+  static final MarkdownStyleSheet _sheet = MarkdownStyleSheet(
+    // Body text
+    p: AppText.ui(size: 13.5, height: 1.65, color: AppColors.textPrimary),
+    pPadding: const EdgeInsets.only(bottom: 8),
+
+    // Headings — display font, stepped sizes
+    h1: AppText.display(size: 20, weight: FontWeight.w700),
+    h1Padding: const EdgeInsets.only(top: 16, bottom: 6),
+    h2: AppText.display(size: 17, weight: FontWeight.w700),
+    h2Padding: const EdgeInsets.only(top: 14, bottom: 6),
+    h3: AppText.display(size: 15, weight: FontWeight.w600),
+    h3Padding: const EdgeInsets.only(top: 10, bottom: 4),
+    h4: AppText.ui(size: 14, weight: FontWeight.w600, color: AppColors.textPrimary),
+    h4Padding: const EdgeInsets.only(top: 8, bottom: 4),
+
+    // Inline code
+    code: AppText.mono(
+      size: 12,
+      color: AppColors.ai,
+    ),
+    codeblockDecoration: BoxDecoration(
+      color: AppColors.bgElevated,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: AppColors.border),
+    ),
+    codeblockPadding: const EdgeInsets.all(14),
+
+    // Blockquote
+    blockquote: AppText.ui(size: 13, color: AppColors.textSecondary, height: 1.6),
+    blockquoteDecoration: BoxDecoration(
+      border: Border(
+        left: BorderSide(color: AppColors.textMuted, width: 3),
+      ),
+    ),
+    blockquotePadding: const EdgeInsets.only(left: 12, top: 2, bottom: 2),
+
+    // Lists
+    listBullet: AppText.ui(size: 13, color: AppColors.textMuted),
+    listBulletPadding: const EdgeInsets.only(right: 8),
+    listIndent: 16,
+
+    // Horizontal rule
+    horizontalRuleDecoration: BoxDecoration(
+      border: Border(bottom: BorderSide(color: AppColors.border)),
+    ),
+
+    // Table
+    tableHead: AppText.mono(size: 11, weight: FontWeight.w600, color: AppColors.textSecondary),
+    tableBody: AppText.mono(size: 11, color: AppColors.textPrimary),
+    tableBorder: TableBorder.all(color: AppColors.border, width: 1),
+    tableHeadAlign: TextAlign.left,
+
+    // Strong / em
+    strong: AppText.ui(size: 13.5, weight: FontWeight.w700, color: AppColors.textPrimary),
+    em: AppText.ui(size: 13.5, color: AppColors.textSecondary)
+        .copyWith(fontStyle: FontStyle.italic),
+
+    // Spacing
+    blockSpacing: 4,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 22,
+            height: 22,
+            margin: const EdgeInsets.only(top: 2, right: 10),
+            decoration: BoxDecoration(
+              color: AppColors.aiBg,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.ai.withValues(alpha: 0.3)),
+            ),
+            child: const Icon(Icons.auto_awesome_rounded, size: 12, color: AppColors.ai),
+          ),
+          Expanded(
+            child: MarkdownBody(
+              data: text,
+              styleSheet: _sheet,
+              softLineBreak: true,
+              selectable: true,
+              builders: {'code': _CodeBlockBuilder()},
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Custom code block builder — applies monospace + terminal lime for fenced blocks.
+class _CodeBlockBuilder extends MarkdownElementBuilder {
+  @override
+  Widget? visitElementAfterWithContext(
+    BuildContext context,
+    dynamic element,
+    TextStyle? preferredStyle,
+    TextStyle? parentStyle,
+  ) {
+    final code = element.textContent as String? ?? '';
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.bgElevated,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SelectableText(
+          code.trimRight(),
+          style: AppText.mono(
+            size: 12,
+            height: 1.6,
+            color: AppColors.terminalText,
+          ),
+        ),
+      ),
     );
   }
 }
 
 // ── Small widgets ─────────────────────────────────────────────────────────────
+
+class _AnimatedStatCard extends StatefulWidget {
+  final int value;
+  final String label;
+  final Color color;
+  final String Function(int) formatter;
+
+  const _AnimatedStatCard({
+    required this.value,
+    required this.label,
+    required this.color,
+    required this.formatter,
+  });
+
+  @override
+  State<_AnimatedStatCard> createState() => _AnimatedStatCardState();
+}
+
+class _AnimatedStatCardState extends State<_AnimatedStatCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _countAnim;
+  late Animation<double> _glowAnim;
+  double _fromValue = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _fromValue = widget.value.toDouble();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 700),
+      vsync: this,
+    );
+    _countAnim = _controller.drive(
+      Tween<double>(begin: _fromValue, end: _fromValue)
+          .chain(CurveTween(curve: Curves.easeOut)),
+    );
+    // Glow fades in then out — peaks at mid-animation
+    _glowAnim = _controller.drive(
+      TweenSequence([
+        TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 30),
+        TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 70),
+      ]),
+    );
+  }
+
+  @override
+  void didUpdateWidget(_AnimatedStatCard old) {
+    super.didUpdateWidget(old);
+    if (old.value != widget.value) {
+      _fromValue = _countAnim.value;
+      _countAnim = _controller.drive(
+        Tween<double>(begin: _fromValue, end: widget.value.toDouble())
+            .chain(CurveTween(curve: Curves.easeOut)),
+      );
+      _glowAnim = _controller.drive(
+        TweenSequence([
+          TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 30),
+          TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 70),
+        ]),
+      );
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final displayed = _countAnim.value.round();
+        final glow = _glowAnim.value;
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.bgElevated,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: glow > 0.01
+                  ? Color.lerp(AppColors.border, widget.color, glow * 0.5)!
+                  : AppColors.border,
+            ),
+            boxShadow: glow > 0.01
+                ? [
+                    BoxShadow(
+                      color: widget.color.withValues(alpha: glow * 0.12),
+                      blurRadius: 12,
+                      spreadRadius: 0,
+                    )
+                  ]
+                : null,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                widget.formatter(displayed),
+                style: AppText.display(
+                  size: 17,
+                  color: glow > 0.01
+                      ? Color.lerp(widget.color, Colors.white, glow * 0.3)!
+                      : widget.color,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                widget.label,
+                style: AppText.mono(
+                  size: 9,
+                  weight: FontWeight.w600,
+                  color: AppColors.textMuted,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AnimatedCostCard extends StatefulWidget {
+  final double value;
+  final String Function(double) formatter;
+
+  const _AnimatedCostCard({required this.value, required this.formatter});
+
+  @override
+  State<_AnimatedCostCard> createState() => _AnimatedCostCardState();
+}
+
+class _AnimatedCostCardState extends State<_AnimatedCostCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _countAnim;
+  late Animation<double> _glowAnim;
+  double _fromValue = 0;
+
+  static const _color = Color(0xFF818CF8); // indigo — distinct from other cards
+
+  @override
+  void initState() {
+    super.initState();
+    _fromValue = widget.value;
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 900),
+      vsync: this,
+    );
+    _countAnim = _controller.drive(
+      Tween<double>(begin: _fromValue, end: _fromValue)
+          .chain(CurveTween(curve: Curves.easeOut)),
+    );
+    _glowAnim = _controller.drive(
+      TweenSequence([
+        TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 25),
+        TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 75),
+      ]),
+    );
+  }
+
+  @override
+  void didUpdateWidget(_AnimatedCostCard old) {
+    super.didUpdateWidget(old);
+    if ((old.value - widget.value).abs() > 0.000001) {
+      _fromValue = _countAnim.value;
+      _countAnim = _controller.drive(
+        Tween<double>(begin: _fromValue, end: widget.value)
+            .chain(CurveTween(curve: Curves.easeOut)),
+      );
+      _glowAnim = _controller.drive(
+        TweenSequence([
+          TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 25),
+          TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 75),
+        ]),
+      );
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final glow = _glowAnim.value;
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+          decoration: BoxDecoration(
+            color: AppColors.bgElevated,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: glow > 0.01
+                  ? Color.lerp(AppColors.border, _color, glow * 0.5)!
+                  : AppColors.border,
+            ),
+            boxShadow: glow > 0.01
+                ? [BoxShadow(
+                    color: _color.withValues(alpha: glow * 0.12),
+                    blurRadius: 14,
+                  )]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'EST. COST',
+                style: AppText.mono(
+                  size: 9,
+                  weight: FontWeight.w600,
+                  color: AppColors.textMuted,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              Text(
+                widget.formatter(_countAnim.value),
+                style: AppText.display(
+                  size: 17,
+                  color: glow > 0.01
+                      ? Color.lerp(_color, Colors.white, glow * 0.3)!
+                      : _color,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
 
 class _IconBtn extends StatelessWidget {
   final IconData icon;
@@ -784,53 +1267,6 @@ class _IconBtn extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(6),
           child: Icon(icon, size: 18, color: AppColors.textMuted),
-        ),
-      ),
-    );
-  }
-}
-
-class _PulsingDot extends StatefulWidget {
-  final Color color;
-  const _PulsingDot({required this.color});
-
-  @override
-  State<_PulsingDot> createState() => _PulsingDotState();
-}
-
-class _PulsingDotState extends State<_PulsingDot>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _anim;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    )..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.25, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _anim,
-      child: Container(
-        width: 6,
-        height: 6,
-        decoration: BoxDecoration(
-          color: widget.color,
-          shape: BoxShape.circle,
         ),
       ),
     );

@@ -7,6 +7,7 @@ import '../services/notification_service.dart';
 import '../services/session_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/session_card.dart';
+import '../widgets/usage_bar.dart';
 import 'agent_output_screen.dart';
 import 'qr_scanner_screen.dart';
 
@@ -126,6 +127,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _buildHeader(user?.email),
             if (_permissionDenied) _buildNotifBanner(),
             _buildScanButton(),
+            const UsageBar(),
             Expanded(child: _buildBody()),
             if (kDebugMode && NotificationService.fcmToken != null)
               _FcmTokenDebugBar(token: NotificationService.fcmToken!),
@@ -136,16 +138,57 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildHeader(String? email) {
+    final liveCount =
+        _sessions.where((s) => AppStatus.isLive(s['status'] as String? ?? '')).length;
+
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 12, 18),
+          padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
           child: Row(
             children: [
+              // Logo mark
+              Container(
+                width: 30,
+                height: 30,
+                margin: const EdgeInsets.only(right: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.bgBase,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Center(
+                  child: Text(
+                    'A',
+                    style: AppText.display(
+                        size: 15, weight: FontWeight.w700, color: AppColors.ai),
+                  ),
+                ),
+              ),
               Text(
                 'Ashral',
-                style: AppText.display(size: 18, letterSpacing: -0.5),
+                style: AppText.display(size: 17, letterSpacing: -0.5),
               ),
+              // Live sessions indicator dot
+              if (liveCount > 0) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.runningBg,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: AppColors.runningBorder),
+                  ),
+                  child: Text(
+                    '$liveCount live',
+                    style: AppText.mono(
+                        size: 10,
+                        weight: FontWeight.w600,
+                        color: AppColors.running),
+                  ),
+                ),
+              ],
               const Spacer(),
               if (email != null)
                 Flexible(
@@ -218,33 +261,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildScanButton() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-      child: GestureDetector(
-        onTap: _openScanner,
-        child: Container(
-          height: 54,
-          decoration: BoxDecoration(
-            color: AppColors.textPrimary,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.qr_code_scanner_rounded,
-                  size: 20, color: AppColors.bgDeep),
-              const SizedBox(width: 10),
-              Text(
-                'Scan QR Code',
-                style: AppText.ui(
-                  size: 14,
-                  weight: FontWeight.w600,
-                  color: AppColors.bgDeep,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+      child: _ScanButton(onTap: _openScanner),
     );
   }
 
@@ -324,7 +342,7 @@ class _HomeScreenState extends State<HomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
           child: Row(
             children: [
               Text('SESSIONS', style: AppText.sectionLabel()),
@@ -345,14 +363,14 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         Expanded(
           child: RefreshIndicator(
             onRefresh: _loadSessions,
             color: AppColors.textPrimary,
             backgroundColor: AppColors.bgElevated,
             child: ListView.builder(
-              padding: EdgeInsets.zero,
+              padding: const EdgeInsets.only(bottom: 16),
               itemCount: _sessions.length,
               itemBuilder: (context, i) {
                 final session = _sessions[i];
@@ -382,6 +400,71 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
+// ── Scan button ───────────────────────────────────────────────────────────────
+
+class _ScanButton extends StatefulWidget {
+  final VoidCallback onTap;
+  const _ScanButton({required this.onTap});
+
+  @override
+  State<_ScanButton> createState() => _ScanButtonState();
+}
+
+class _ScanButtonState extends State<_ScanButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: Container(
+          height: 56,
+          decoration: BoxDecoration(
+            color: AppColors.textPrimary,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: AppColors.ai.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.qr_code_scanner_rounded,
+                  size: 17,
+                  color: AppColors.ai,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Scan QR Code',
+                style: AppText.ui(
+                  size: 15,
+                  weight: FontWeight.w600,
+                  color: AppColors.bgDeep,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── FCM debug bar ─────────────────────────────────────────────────────────────
 
 class _FcmTokenDebugBar extends StatelessWidget {
   final String token;

@@ -38,8 +38,11 @@ dependencies:
   firebase_messaging: ^15.1.0
   flutter_local_notifications: ^18.0.0
   mobile_scanner: ^6.0.0
+  image_picker: ^1.1.2
   http: ^1.2.2
   google_fonts: ^6.2.1
+  shared_preferences: ^2.5.5
+  flutter_markdown: ^0.7.7+1
 
 dev_dependencies:
   flutter_test:

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../config/constants.dart';
@@ -26,25 +27,26 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
   Future<void> _onDetect(BarcodeCapture capture) async {
     if (_processing) return;
-
     final rawValue = capture.barcodes.firstOrNull?.rawValue;
     if (rawValue == null) return;
+    await _handleRawValue(rawValue);
+  }
 
-    // Validate URL format
-    if (!rawValue.startsWith(kQrUrlPrefix)) return;
+  Future<void> _handleRawValue(String rawValue) async {
+    if (_processing) return;
 
-    final uri = Uri.tryParse(rawValue);
-    final sessionId = uri?.pathSegments.lastOrNull ?? '';
-    if (sessionId.isEmpty) return;
+    final sessionId = _extractSessionId(rawValue);
+    if (sessionId == null) {
+      setState(() => _errorMessage = 'Invalid QR code');
+      return;
+    }
 
     await HapticFeedback.mediumImpact();
     await _controller.stop();
 
-    // Ask for a custom name before connecting
     if (!mounted) return;
     final nameResult = await _askForCustomName();
     if (nameResult == null) {
-      // User cancelled — resume scanning
       await _controller.start();
       return;
     }
@@ -59,7 +61,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         sessionId: sessionId,
         customName: nameResult.isEmpty ? null : nameResult,
       );
-
       if (mounted) Navigator.pop(context, sessionId);
     } catch (e) {
       final message = e.toString().replaceFirst('Exception: ', '');
@@ -73,7 +74,137 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     }
   }
 
-  /// Returns the entered name, empty string if skipped, or null if cancelled.
+  String? _extractSessionId(String value) {
+    final trimmed = value.trim();
+    if (trimmed.startsWith(kQrUrlPrefix)) {
+      final uri = Uri.tryParse(trimmed);
+      final id = uri?.pathSegments.lastOrNull ?? '';
+      return id.isNotEmpty ? id : null;
+    }
+    // Accept a bare session ID (no slashes, reasonable length)
+    if (!trimmed.contains('/') && trimmed.length >= 8) return trimmed;
+    return null;
+  }
+
+  Future<void> _pickFromGallery() async {
+    final picker = ImagePicker();
+    final file = await picker.pickImage(source: ImageSource.gallery);
+    if (file == null) return;
+
+    // analyzeImage must be called before stop() on iOS — stopping first hangs.
+    BarcodeCapture? capture;
+    try {
+      capture = await _controller
+          .analyzeImage(file.path)
+          .timeout(const Duration(seconds: 10));
+    } catch (_) {
+      capture = null;
+    }
+
+    await _controller.stop();
+    if (!mounted) return;
+
+    final rawValue = capture?.barcodes.firstOrNull?.rawValue;
+    if (rawValue == null) {
+      setState(() => _errorMessage = 'No QR code found in image');
+      await _controller.start();
+      return;
+    }
+    await _handleRawValue(rawValue);
+  }
+
+  Future<void> _enterManually() async {
+    await _controller.stop();
+    if (!mounted) return;
+
+    final codeController = TextEditingController();
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF111111),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+        side: BorderSide(color: Color(0xFF1E1E1E)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          top: 24,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Enter code',
+              style: GoogleFonts.bricolageGrotesque(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Paste the session URL or ID from your terminal.',
+              style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13, color: const Color(0xFF4A4A4A)),
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: codeController,
+              autofocus: true,
+              style: GoogleFonts.plusJakartaSans(
+                  fontSize: 14, color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'https://ashral-web.vercel.app/join/…',
+                hintStyle: GoogleFonts.plusJakartaSans(
+                    fontSize: 13, color: const Color(0xFF333333)),
+              ),
+              onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, null),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFF222222)),
+                      foregroundColor: const Color(0xFF5C5C5C),
+                    ),
+                    child: Text('Cancel',
+                        style: GoogleFonts.plusJakartaSans(
+                            fontWeight: FontWeight.w500)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () =>
+                        Navigator.pop(ctx, codeController.text.trim()),
+                    child: Text('Continue',
+                        style: GoogleFonts.plusJakartaSans(
+                            fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+    Future.delayed(const Duration(milliseconds: 400), codeController.dispose);
+
+    if (result == null || result.isEmpty) {
+      await _controller.start();
+      return;
+    }
+    await _handleRawValue(result);
+  }
+
   Future<String?> _askForCustomName() async {
     final controller = TextEditingController();
     final result = await showModalBottomSheet<String>(
@@ -155,7 +286,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         ),
       ),
     );
-    controller.dispose();
+    Future.delayed(const Duration(milliseconds: 400), controller.dispose);
     return result;
   }
 
@@ -182,7 +313,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       body: Stack(
         alignment: Alignment.center,
         children: [
-          // Camera
           MobileScanner(
             controller: _controller,
             onDetect: _onDetect,
@@ -194,18 +324,16 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             height: 256,
             decoration: BoxDecoration(
               border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  width: 1),
+                  color: Colors.white.withValues(alpha: 0.15), width: 1),
               borderRadius: BorderRadius.circular(12),
             ),
           ),
 
-          // Corner accents
           ..._buildCorners(),
 
-          // Bottom status area
+          // Bottom status / action area
           Positioned(
-            bottom: 60,
+            bottom: 48,
             left: 24,
             right: 24,
             child: Column(
@@ -260,6 +388,27 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                     style: GoogleFonts.plusJakartaSans(
                         color: const Color(0xFF555555), fontSize: 13),
                   ),
+                const SizedBox(height: 20),
+                // Alternative entry options
+                Row(
+                  children: [
+                    Expanded(
+                      child: _AltButton(
+                        icon: Icons.photo_library_outlined,
+                        label: 'Choose photo',
+                        onTap: _processing ? null : _pickFromGallery,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _AltButton(
+                        icon: Icons.keyboard_outlined,
+                        label: 'Enter code',
+                        onTap: _processing ? null : _enterManually,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -273,7 +422,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     const thickness = 2.5;
     const color = Colors.white;
     const radius = 3.0;
-    const offset = 130 - thickness / 2; // half of 260px viewfinder
+    const offset = 130 - thickness / 2;
 
     Widget corner(double top, double left, bool flipH, bool flipV) {
       return Positioned(
@@ -284,7 +433,11 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         child: CustomPaint(
           size: const Size(size, size),
           painter: _CornerPainter(
-              flipH: flipH, flipV: flipV, color: color, thickness: thickness, radius: radius),
+              flipH: flipH,
+              flipV: flipV,
+              color: color,
+              thickness: thickness,
+              radius: radius),
         ),
       );
     }
@@ -295,6 +448,51 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       corner(0, 0, false, true),
       corner(0, 0, true, true),
     ];
+  }
+}
+
+class _AltButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  const _AltButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF111111),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFF1E1E1E)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16, color: const Color(0xFF888888)),
+            const SizedBox(width: 7),
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF888888),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
