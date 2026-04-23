@@ -234,6 +234,9 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
         '';
   }
 
+  String? get _agentSessionId =>
+      _sessionDetail?['agentSessionId'] as String?;
+
   Map<String, dynamic>? get _stats {
     final s = _sessionDetail?['stats'];
     if (s is Map<String, dynamic>) return s;
@@ -561,7 +564,19 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
   // ── Body ──────────────────────────────────────────────────────────────────
 
   Widget _buildBody() {
-    if (_chunks.isEmpty) return _buildEmptyState();
+    if (_chunks.isEmpty) {
+      final agentSessionId = _agentSessionId;
+      final showResume = agentSessionId != null && !AppStatus.isLive(_status);
+      if (showResume) {
+        return Column(
+          children: [
+            Expanded(child: _buildEmptyState()),
+            _buildResumeFooter(agentSessionId),
+          ],
+        );
+      }
+      return _buildEmptyState();
+    }
     return _buildTerminal();
   }
 
@@ -597,11 +612,16 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
   }
 
   Widget _buildTerminal() {
+    final agentSessionId = _agentSessionId;
+    final showResume = agentSessionId != null && !AppStatus.isLive(_status);
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.fromLTRB(0, 8, 0, 32),
-      itemCount: _chunks.length,
+      itemCount: _chunks.length + (showResume ? 1 : 0),
       itemBuilder: (context, i) {
+        if (showResume && i == _chunks.length) {
+          return _buildResumeFooter(agentSessionId);
+        }
         final chunk = _chunks[i];
         final text = (chunk['text'] as String? ?? '').trim();
         if (text.isEmpty) return const SizedBox.shrink();
@@ -609,6 +629,65 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
         final isUser = chunk['stream'] == 'stderr';
         return isUser ? _UserMessage(text: text) : _AiMessage(text: text);
       },
+    );
+  }
+
+  Widget _buildResumeFooter(String agentSessionId) {
+    final shortId = (_sessionDetail?['shortId'] as String?) ??
+        widget.sessionId.replaceAll('-', '').substring(0, 8);
+    final command = 'ashral resume $shortId';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Divider(color: AppColors.borderSubtle),
+          const SizedBox(height: 12),
+          Text('RESUME', style: AppText.sectionLabel()),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: command));
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text('Command copied',
+                    style: AppText.ui(size: 13, color: AppColors.textPrimary)),
+                backgroundColor: AppColors.bgElevated,
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 2),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ));
+            },
+            child: Container(
+              width: double.infinity,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.bgElevated,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      command,
+                      style: AppText.mono(
+                        size: 12,
+                        color: AppColors.terminalCmd,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Icon(Icons.copy_rounded,
+                      size: 14, color: AppColors.textMuted),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
