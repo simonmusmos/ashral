@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -52,9 +53,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openScanner() async {
+    HapticFeedback.lightImpact();
     final sessionId = await Navigator.push<String>(
       context,
-      MaterialPageRoute(builder: (_) => const QrScannerScreen()),
+      CupertinoPageRoute(builder: (_) => const QrScannerScreen()),
     );
     if (sessionId != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -63,7 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
               style: AppText.ui(size: 13, color: AppColors.textPrimary)),
           backgroundColor: AppColors.bgElevated,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
       _loadSessions();
@@ -82,8 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: AppText.ui(size: 13, color: AppColors.textPrimary)),
             backgroundColor: AppColors.errorBg,
             behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
       }
@@ -105,8 +106,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to rename: $e',
-                style: AppText.ui(size: 13)),
+            content: Text('Failed to rename: $e', style: AppText.ui(size: 13)),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -116,113 +116,87 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = AuthService.currentUser;
-
     return Scaffold(
       backgroundColor: AppColors.bgDeep,
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildHeader(user?.email),
-            if (_permissionDenied) _buildNotifBanner(),
-            _buildScanButton(),
-            const UsageBar(),
-            Expanded(child: _buildBody()),
-            if (kDebugMode && NotificationService.fcmToken != null)
-              _FcmTokenDebugBar(token: NotificationService.fcmToken!),
-          ],
-        ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SafeArea(
+            bottom: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildHeader(),
+                if (_permissionDenied) _buildNotifBanner(),
+                const UsageBar(),
+              ],
+            ),
+          ),
+          Expanded(child: _buildBody()),
+          // Scan button pinned at thumb level — always reachable
+          SafeArea(
+            top: false,
+            child: Container(
+              decoration: const BoxDecoration(
+                color: AppColors.bgDeep,
+                border: Border(top: BorderSide(color: AppColors.borderSubtle)),
+              ),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: _ScanButton(onTap: _openScanner),
+            ),
+          ),
+          if (kDebugMode && NotificationService.fcmToken != null)
+            _FcmTokenDebugBar(token: NotificationService.fcmToken!),
+        ],
       ),
     );
   }
 
-  Widget _buildHeader(String? email) {
-    final liveCount =
-        _sessions.where((s) => AppStatus.isLive(s['status'] as String? ?? '')).length;
+  Widget _buildHeader() {
+    final liveCount = _sessions
+        .where((s) => AppStatus.isLive(s['status'] as String? ?? ''))
+        .length;
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
-          child: Row(
-            children: [
-              // Logo mark
-              Container(
-                width: 30,
-                height: 30,
-                margin: const EdgeInsets.only(right: 10),
-                decoration: BoxDecoration(
-                  color: AppColors.bgBase,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Center(
-                  child: Text(
-                    'A',
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
+      child: Row(
+        children: [
+            RichText(
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'A',
                     style: AppText.display(
-                        size: 15, weight: FontWeight.w700, color: AppColors.ai),
+                        size: 21, weight: FontWeight.w800, color: AppColors.ai),
                   ),
-                ),
-              ),
-              Text(
-                'Ashral',
-                style: AppText.display(size: 17, letterSpacing: -0.5),
-              ),
-              // Live sessions indicator dot
-              if (liveCount > 0) ...[
-                const SizedBox(width: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.runningBg,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: AppColors.runningBorder),
+                  TextSpan(
+                    text: 'shral',
+                    style: AppText.display(size: 21, letterSpacing: -0.5),
                   ),
-                  child: Text(
-                    '$liveCount live',
-                    style: AppText.mono(
-                        size: 10,
-                        weight: FontWeight.w600,
-                        color: AppColors.running),
-                  ),
-                ),
-              ],
-              const Spacer(),
-              if (email != null)
-                Flexible(
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 4),
-                    child: Text(
-                      email,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppText.mono(size: 11, color: AppColors.textMuted),
-                    ),
-                  ),
-                ),
-              IconButton(
-                icon: const Icon(Icons.refresh_rounded, size: 18),
-                color: AppColors.textMuted,
-                tooltip: 'Refresh',
-                onPressed: _loadSessions,
-                visualDensity: VisualDensity.compact,
+                ],
               ),
-              IconButton(
-                icon: const Icon(Icons.logout_rounded, size: 18),
-                color: AppColors.textMuted,
-                tooltip: 'Sign out',
-                onPressed: () {
-                  NotificationService.reset();
-                  AuthService.signOut();
-                },
-                visualDensity: VisualDensity.compact,
-              ),
+            ),
+            if (liveCount > 0) ...[
+              const SizedBox(width: 8),
+              _LiveBadge(count: liveCount),
             ],
-          ),
+            const Spacer(),
+            _NavIconBtn(
+              icon: CupertinoIcons.arrow_clockwise,
+              onTap: _loadSessions,
+              tooltip: 'Refresh',
+            ),
+            const SizedBox(width: 2),
+            _NavIconBtn(
+              icon: CupertinoIcons.square_arrow_right,
+              onTap: () {
+                NotificationService.reset();
+                AuthService.signOut();
+              },
+              tooltip: 'Sign out',
+            ),
+          ],
         ),
-        const Divider(height: 1, color: AppColors.borderSubtle),
-      ],
     );
   }
 
@@ -232,15 +206,15 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.fromLTRB(20, 10, 12, 10),
       child: Row(
         children: [
-          const Icon(Icons.notifications_off_outlined,
-              size: 14, color: AppColors.waiting),
+          const Icon(CupertinoIcons.bell_slash,
+              size: 13, color: AppColors.waiting),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               'Notifications disabled — enable in Settings for agent alerts.',
               style: AppText.ui(
                   size: 12,
-                  color: AppColors.waiting.withValues(alpha: 0.7)),
+                  color: AppColors.waiting.withValues(alpha: 0.85)),
             ),
           ),
           TextButton(
@@ -251,7 +225,9 @@ class _HomeScreenState extends State<HomeScreen> {
               visualDensity: VisualDensity.compact,
             ),
             child: Text('Dismiss',
-                style: AppText.ui(size: 11, weight: FontWeight.w600,
+                style: AppText.ui(
+                    size: 11,
+                    weight: FontWeight.w600,
                     color: AppColors.waiting)),
           ),
         ],
@@ -259,20 +235,10 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildScanButton() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
-      child: _ScanButton(onTap: _openScanner),
-    );
-  }
-
   Widget _buildBody() {
     if (_loadingSessions) {
       return const Center(
-        child: CircularProgressIndicator(
-          color: AppColors.textMuted,
-          strokeWidth: 1.5,
-        ),
+        child: CupertinoActivityIndicator(color: AppColors.textMuted),
       );
     }
 
@@ -283,13 +249,13 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.cloud_off_outlined,
-                  size: 36, color: AppColors.textMuted),
-              const SizedBox(height: 14),
+              const Icon(CupertinoIcons.wifi_slash,
+                  size: 34, color: AppColors.textMuted),
+              const SizedBox(height: 16),
               Text(
                 'Could not load sessions',
                 style: AppText.ui(
-                  size: 14,
+                  size: 15,
                   weight: FontWeight.w600,
                   color: AppColors.textSecondary,
                 ),
@@ -298,13 +264,13 @@ class _HomeScreenState extends State<HomeScreen> {
               Text(
                 _sessionsError!,
                 textAlign: TextAlign.center,
-                style: AppText.ui(size: 12, color: AppColors.textMuted),
+                style: AppText.ui(size: 13, color: AppColors.textMuted),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
               OutlinedButton(
                 onPressed: _loadSessions,
                 child: Text('Try again',
-                    style: AppText.ui(size: 13, weight: FontWeight.w500)),
+                    style: AppText.ui(size: 14, weight: FontWeight.w500)),
               ),
             ],
           ),
@@ -314,89 +280,105 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (_sessions.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.sensors_off_rounded,
-                size: 32, color: AppColors.textMuted),
-            const SizedBox(height: 16),
-            Text(
-              'No active sessions',
-              style: AppText.ui(
-                size: 14,
-                weight: FontWeight.w500,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              'Scan a QR code from your agent terminal',
-              style: AppText.ui(size: 12, color: AppColors.textMuted),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-          child: Row(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text('SESSIONS', style: AppText.sectionLabel()),
-              const SizedBox(width: 8),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppColors.bgElevated,
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Text(
-                  '${_sessions.length}',
-                  style: AppText.mono(size: 10, color: AppColors.textMuted),
-                ),
+              const Icon(
+                CupertinoIcons.antenna_radiowaves_left_right,
+                size: 30,
+                color: AppColors.textMuted,
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'No sessions yet',
+                style: AppText.display(
+                    size: 18, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                'Scan a QR code from a running agent to get started',
+                textAlign: TextAlign.center,
+                style: AppText.ui(
+                    size: 13, height: 1.5, color: AppColors.textMuted),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: _loadSessions,
-            color: AppColors.textPrimary,
-            backgroundColor: AppColors.bgElevated,
-            child: ListView.builder(
-              padding: const EdgeInsets.only(bottom: 16),
-              itemCount: _sessions.length,
-              itemBuilder: (context, i) {
-                final session = _sessions[i];
-                final sessionId = session['sessionId'] as String? ??
-                    session['id'] as String? ??
-                    '';
-                return SessionCard(
-                  session: session,
-                  onLeave: () => _leaveSession(sessionId),
-                  onRename: (customName) =>
-                      _renameSession(sessionId, customName),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => AgentOutputScreen(
-                        sessionId: sessionId,
-                        sessionMeta: session,
-                      ),
-                    ),
-                  ),
-                );
-              },
+      );
+    }
+
+    // Cards render directly — no "SESSIONS" header needed
+    return RefreshIndicator(
+      onRefresh: _loadSessions,
+      color: AppColors.textPrimary,
+      backgroundColor: AppColors.bgElevated,
+      child: ListView.builder(
+        physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics()),
+        padding: const EdgeInsets.fromLTRB(0, 16, 0, 32),
+        itemCount: _sessions.length,
+        itemBuilder: (context, i) {
+          final session = _sessions[i];
+          final sessionId = session['sessionId'] as String? ??
+              session['id'] as String? ??
+              '';
+          return SessionCard(
+            session: session,
+            onLeave: () => _leaveSession(sessionId),
+            onRename: (customName) =>
+                _renameSession(sessionId, customName),
+            onTap: () => Navigator.push(
+              context,
+              CupertinoPageRoute(
+                builder: (_) => AgentOutputScreen(
+                  sessionId: sessionId,
+                  sessionMeta: session,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ── Live badge ─────────────────────────────────────────────────────────────────
+
+class _LiveBadge extends StatelessWidget {
+  final int count;
+  const _LiveBadge({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.runningBg,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.runningBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 5,
+            height: 5,
+            decoration: const BoxDecoration(
+              color: AppColors.running,
+              shape: BoxShape.circle,
             ),
           ),
-        ),
-      ],
+          const SizedBox(width: 5),
+          Text(
+            '$count live',
+            style: AppText.mono(
+                size: 10, weight: FontWeight.w600, color: AppColors.running),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -423,10 +405,10 @@ class _ScanButtonState extends State<_ScanButton> {
       onTap: widget.onTap,
       child: AnimatedScale(
         scale: _pressed ? 0.97 : 1.0,
-        duration: const Duration(milliseconds: 120),
+        duration: const Duration(milliseconds: 110),
         curve: Curves.easeOut,
         child: Container(
-          height: 56,
+          height: 52,
           decoration: BoxDecoration(
             color: AppColors.textPrimary,
             borderRadius: BorderRadius.circular(14),
@@ -434,22 +416,14 @@ class _ScanButtonState extends State<_ScanButton> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: AppColors.ai.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.qr_code_scanner_rounded,
-                  size: 17,
-                  color: AppColors.ai,
-                ),
+              const Icon(
+                CupertinoIcons.qrcode_viewfinder,
+                size: 18,
+                color: AppColors.bgDeep,
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Text(
-                'Scan QR Code',
+                'Scan to connect',
                 style: AppText.ui(
                   size: 15,
                   weight: FontWeight.w600,
@@ -458,6 +432,34 @@ class _ScanButtonState extends State<_ScanButton> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Nav icon button ────────────────────────────────────────────────────────────
+
+class _NavIconBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final String tooltip;
+
+  const _NavIconBtn(
+      {required this.icon, required this.onTap, required this.tooltip});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: 38,
+          height: 38,
+          alignment: Alignment.center,
+          child: Icon(icon, size: 17, color: AppColors.textMuted),
         ),
       ),
     );

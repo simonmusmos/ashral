@@ -4,64 +4,64 @@ import 'package:google_fonts/google_fonts.dart';
 // ── Color tokens ──────────────────────────────────────────────────────────────
 
 abstract final class AppColors {
-  // Backgrounds
-  static const bgDeep = Color(0xFF030305);
-  static const bgBase = Color(0xFF0A0A0F);
-  static const bgElevated = Color(0xFF121218);
-  static const bgOverlay = Color(0xFF0F0F1A);
+  // Backgrounds — Apple dark system palette
+  static const bgDeep     = Color(0xFF000000);   // True black (OLED optimized)
+  static const bgBase     = Color(0xFF111113);   // Primary content layer
+  static const bgElevated = Color(0xFF1C1C1E);   // Apple primary grouped background
+  static const bgOverlay  = Color(0xFF2C2C2E);   // Apple secondary grouped background
 
-  // Borders
-  static const border = Color(0xFF1A1A26);
-  static const borderSubtle = Color(0xFF0F0F18);
+  // Separators — Apple-style translucent white
+  static const border       = Color(0x26FFFFFF); // white 15%
+  static const borderSubtle = Color(0x14FFFFFF); // white 8%
 
-  // Foreground
-  static const textPrimary = Color(0xFFEEEEF2);
-  static const textSecondary = Color(0xFF8B8B9E);
-  static const textMuted = Color(0xFF4A4A60);
+  // Labels — Apple dark label hierarchy
+  static const textPrimary   = Color(0xFFFFFFFF);
+  static const textSecondary = Color(0xFF98989E); // Apple secondary label
+  static const textMuted     = Color(0xFF636366); // Apple tertiary label
 
-  // Status: running / active
-  static const running = Color(0xFF4ADE80);
-  static const runningBg = Color(0xFF0A1F12);
-  static const runningBorder = Color(0x264ADE80); // 15% opacity
+  // Status: running / active — Apple system green
+  static const running       = Color(0xFF30D158);
+  static const runningBg     = Color(0x1430D158); // 8% opacity
+  static const runningBorder = Color(0x2630D158); // 15% opacity
 
   // Status: success / completed
-  static const success = Color(0xFF22C55E);
-  static const successBg = Color(0xFF091A0F);
-  static const successBorder = Color(0x1A22C55E);
+  static const success       = Color(0xFF30D158);
+  static const successBg     = Color(0x0A30D158);
+  static const successBorder = Color(0x1A30D158);
 
-  // Status: active/in-progress task (indigo, not red)
-  static const active = Color(0xFF818CF8);
-  static const activeBg = Color(0xFF0E0E1F);
-  static const activeBorder = Color(0x1A818CF8);
+  // Status: active/in-progress — indigo
+  static const active       = Color(0xFF6E6CF8);
+  static const activeBg     = Color(0x0F6E6CF8);
+  static const activeBorder = Color(0x1A6E6CF8);
 
-  // Status: waiting
-  static const waiting = Color(0xFFFBBF24);
-  static const waitingBg = Color(0xFF1A1500);
-  static const waitingBorder = Color(0x1AFBBF24);
+  // Status: waiting — Apple system orange
+  static const waiting       = Color(0xFFFF9F0A);
+  static const waitingBg     = Color(0x14FF9F0A);
+  static const waitingBorder = Color(0x26FF9F0A);
 
-  // Status: error / failed
-  static const error = Color(0xFFF87171);
-  static const errorBg = Color(0xFF1A0A0A);
-  static const errorBorder = Color(0x1AF87171);
+  // Status: error / failed — Apple system red
+  static const error       = Color(0xFFFF453A);
+  static const errorBg     = Color(0x14FF453A);
+  static const errorBorder = Color(0x26FF453A);
 
-  // Status: pending (dimmed)
-  static const pending = Color(0xFF4A4A60);
-  static const pendingBg = Color(0xFF0D0D14);
+  // Status: pending
+  static const pending   = Color(0xFF48484A);
+  static const pendingBg = Color(0xFF1C1C1E);
 
-  // Accent: AI / Claude brand
-  static const ai = Color(0xFFFB923C);
-  static const aiBg = Color(0xFF1A0F06);
+  // AI / brand accent — warm amber
+  static const ai   = Color(0xFFFF9F0A);
+  static const aiBg = Color(0x14FF9F0A);
 
   // Terminal text
-  static const terminalText = Color(0xFFA3E635); // lime-400
-  static const terminalCmd = Color(0xFF7DD3FC);  // sky-300
-  static const terminalWarn = Color(0xFFFBBF24);
-  static const terminalErr = Color(0xFFF87171);
-  static const terminalSuccess = Color(0xFF4ADE80);
+  static const terminalText    = Color(0xFF98E268); // lime
+  static const terminalCmd     = Color(0xFF64D2FF); // sky blue
+  static const terminalWarn    = Color(0xFFFF9F0A);
+  static const terminalErr     = Color(0xFFFF453A);
+  static const terminalSuccess = Color(0xFF30D158);
 
-  // Diff colors
-  static const diffAdd = Color(0xFF4ADE80);
-  static const diffRemove = Color(0xFFF87171);
+  // Diff
+  static const diffAdd    = Color(0xFF30D158);
+  static const diffRemove = Color(0xFFFF453A);
 }
 
 // ── Text style helpers ─────────────────────────────────────────────────────────
@@ -78,10 +78,10 @@ abstract final class AppText {
         fontSize: size,
         fontWeight: weight,
         color: color,
-        letterSpacing: letterSpacing ?? -0.3,
+        letterSpacing: letterSpacing ?? -0.4,
       );
 
-  /// Plus Jakarta Sans — all UI text
+  /// Inter — all UI text (SF Pro equivalent via Google Fonts)
   static TextStyle ui({
     double size = 15,
     FontWeight weight = FontWeight.w400,
@@ -89,7 +89,7 @@ abstract final class AppText {
     double? letterSpacing,
     double? height,
   }) =>
-      GoogleFonts.plusJakartaSans(
+      GoogleFonts.inter(
         fontSize: size,
         fontWeight: weight,
         color: color,
@@ -189,8 +189,7 @@ abstract final class AppStatus {
 
 abstract final class AshralTheme {
   static ThemeData build() {
-    final jakartaBase =
-        GoogleFonts.plusJakartaSansTextTheme(ThemeData.dark().textTheme);
+    final interBase = GoogleFonts.interTextTheme(ThemeData.dark().textTheme);
 
     return ThemeData(
       useMaterial3: true,
@@ -205,51 +204,44 @@ abstract final class AshralTheme {
         error: AppColors.error,
         onError: AppColors.textPrimary,
       ),
-      textTheme: jakartaBase.copyWith(
-        bodyMedium:
-            jakartaBase.bodyMedium?.copyWith(color: AppColors.textSecondary),
-        bodySmall:
-            jakartaBase.bodySmall?.copyWith(color: AppColors.textSecondary),
+      textTheme: interBase.copyWith(
+        bodyMedium: interBase.bodyMedium?.copyWith(color: AppColors.textSecondary),
+        bodySmall: interBase.bodySmall?.copyWith(color: AppColors.textSecondary),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.bgBase,
-        hintStyle: GoogleFonts.plusJakartaSans(
-            color: AppColors.textMuted, fontSize: 14),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        hintStyle: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 14),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.textPrimary),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.ai, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.error),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.error),
         ),
-        errorStyle:
-            GoogleFonts.plusJakartaSans(color: AppColors.error, fontSize: 12),
+        errorStyle: GoogleFonts.inter(color: AppColors.error, fontSize: 12),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.textPrimary,
           foregroundColor: AppColors.bgDeep,
           minimumSize: const Size.fromHeight(52),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          textStyle: GoogleFonts.plusJakartaSans(
-              fontSize: 14, fontWeight: FontWeight.w600),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          textStyle: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -257,28 +249,25 @@ abstract final class AshralTheme {
           foregroundColor: AppColors.textSecondary,
           side: const BorderSide(color: AppColors.border),
           minimumSize: const Size.fromHeight(52),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          textStyle: GoogleFonts.plusJakartaSans(
-              fontSize: 14, fontWeight: FontWeight.w500),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          textStyle: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w500),
         ),
       ),
       cardTheme: CardThemeData(
         color: AppColors.bgBase,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           side: const BorderSide(color: AppColors.border),
         ),
       ),
-      dividerTheme:
-          const DividerThemeData(color: AppColors.borderSubtle, thickness: 1),
+      dividerTheme: const DividerThemeData(color: AppColors.borderSubtle, thickness: 0.5),
       appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.bgDeep,
+        backgroundColor: Colors.transparent,
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
         scrolledUnderElevation: 0,
-        titleTextStyle: GoogleFonts.plusJakartaSans(
+        titleTextStyle: GoogleFonts.inter(
           color: AppColors.textPrimary,
           fontSize: 15,
           fontWeight: FontWeight.w600,

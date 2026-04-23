@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
@@ -116,17 +117,14 @@ class _AuthScreenState extends State<AuthScreen>
                     children: [
                       const SizedBox(height: 72),
 
-                      // ── Wordmark ──────────────────────────────────
                       _buildWordmark(),
 
                       const SizedBox(height: 52),
 
-                      // ── Mode tabs ─────────────────────────────────
                       _ModeTabs(mode: _mode, onToggle: _toggleMode),
 
                       const SizedBox(height: 32),
 
-                      // ── Form ──────────────────────────────────────
                       Form(
                         key: _formKey,
                         child: Column(
@@ -164,16 +162,23 @@ class _AuthScreenState extends State<AuthScreen>
                               style: AppText.ui(size: 14),
                               decoration: InputDecoration(
                                 hintText: '••••••••',
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-                                    _obscurePassword
-                                        ? Icons.visibility_off_outlined
-                                        : Icons.visibility_outlined,
-                                    size: 17,
-                                    color: AppColors.textMuted,
+                                suffixIcon: GestureDetector(
+                                  onTap: () => setState(
+                                      () => _obscurePassword = !_obscurePassword),
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(right: 14),
+                                    child: Icon(
+                                      _obscurePassword
+                                          ? CupertinoIcons.eye_slash
+                                          : CupertinoIcons.eye,
+                                      size: 17,
+                                      color: AppColors.textMuted,
+                                    ),
                                   ),
-                                  onPressed: () => setState(() =>
-                                      _obscurePassword = !_obscurePassword),
+                                ),
+                                suffixIconConstraints: const BoxConstraints(
+                                  minWidth: 44,
+                                  minHeight: 44,
                                 ),
                               ),
                               validator: (v) {
@@ -205,7 +210,6 @@ class _AuthScreenState extends State<AuthScreen>
 
                       const SizedBox(height: 28),
 
-                      // ── Mode toggle link ──────────────────────────
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -213,8 +217,8 @@ class _AuthScreenState extends State<AuthScreen>
                             isSignIn
                                 ? "Don't have an account?"
                                 : 'Already have an account?',
-                            style: AppText.ui(
-                                size: 13, color: AppColors.textMuted),
+                            style:
+                                AppText.ui(size: 13, color: AppColors.textMuted),
                           ),
                           const SizedBox(width: 5),
                           GestureDetector(
@@ -224,7 +228,7 @@ class _AuthScreenState extends State<AuthScreen>
                               style: AppText.ui(
                                 size: 13,
                                 weight: FontWeight.w600,
-                                color: AppColors.textSecondary,
+                                color: AppColors.ai,
                               ),
                             ),
                           ),
@@ -247,22 +251,24 @@ class _AuthScreenState extends State<AuthScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Logo mark — small terminal-style monogram
         Container(
-          width: 44,
-          height: 44,
-          margin: const EdgeInsets.only(bottom: 16),
+          width: 50,
+          height: 50,
+          margin: const EdgeInsets.only(bottom: 20),
           decoration: BoxDecoration(
-            color: AppColors.bgBase,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
+            color: AppColors.aiBg,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: AppColors.ai.withValues(alpha: 0.25),
+              width: 1,
+            ),
           ),
           child: Center(
             child: Text(
               'A',
               style: AppText.display(
-                size: 22,
-                weight: FontWeight.w700,
+                size: 24,
+                weight: FontWeight.w800,
                 color: AppColors.ai,
                 letterSpacing: 0,
               ),
@@ -388,22 +394,19 @@ class _SubmitButton extends StatelessWidget {
           disabledBackgroundColor: AppColors.bgElevated,
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
           ),
         ),
         child: isLoading
             ? const SizedBox(
                 height: 18,
                 width: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 1.5,
-                  color: AppColors.textMuted,
-                ),
+                child: CupertinoActivityIndicator(color: AppColors.textMuted),
               )
             : Text(
                 label,
                 style: AppText.ui(
-                  size: 14,
+                  size: 15,
                   weight: FontWeight.w600,
                   color: AppColors.bgDeep,
                 ),
@@ -425,7 +428,7 @@ class _ErrorBanner extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.errorBg,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.errorBorder),
       ),
       child: Row(
@@ -433,14 +436,14 @@ class _ErrorBanner extends StatelessWidget {
         children: [
           const Padding(
             padding: EdgeInsets.only(top: 1),
-            child: Icon(Icons.error_outline, size: 15, color: AppColors.error),
+            child: Icon(CupertinoIcons.exclamationmark_circle,
+                size: 15, color: AppColors.error),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
-              style: AppText.ui(
-                  size: 13, color: AppColors.error, height: 1.5),
+              style: AppText.ui(size: 13, color: AppColors.error, height: 1.5),
             ),
           ),
         ],

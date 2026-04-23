@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../services/usage_service.dart';
@@ -34,7 +35,7 @@ class _UsageBarState extends State<UsageBar> {
       isScrollControlled: true,
       backgroundColor: AppColors.bgBase,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
         side: BorderSide(color: AppColors.border),
       ),
       builder: (ctx) => Padding(
@@ -119,20 +120,21 @@ class _UsageBarState extends State<UsageBar> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: AppColors.bgBase,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AppColors.border),
         ),
         child: Row(
           children: [
-            const Icon(Icons.account_balance_wallet_outlined,
-                size: 15, color: AppColors.textMuted),
+            const Icon(CupertinoIcons.creditcard,
+                size: 14, color: AppColors.textMuted),
             const SizedBox(width: 10),
             Text(
               'No spending yet — tap to set limits',
               style: AppText.ui(size: 12, color: AppColors.textMuted),
             ),
             const Spacer(),
-            const Icon(Icons.tune_rounded, size: 14, color: AppColors.textMuted),
+            const Icon(CupertinoIcons.slider_horizontal_3,
+                size: 13, color: AppColors.textMuted),
           ],
         ),
       ),
@@ -147,7 +149,7 @@ class _UsageBarState extends State<UsageBar> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.bgBase,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AppColors.border),
         ),
         child: Column(
@@ -157,7 +159,8 @@ class _UsageBarState extends State<UsageBar> {
               children: [
                 Text('USAGE', style: AppText.sectionLabel()),
                 const Spacer(),
-                const Icon(Icons.tune_rounded, size: 13, color: AppColors.textMuted),
+                const Icon(CupertinoIcons.slider_horizontal_3,
+                    size: 13, color: AppColors.textMuted),
               ],
             ),
             const SizedBox(height: 12),

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -157,8 +158,8 @@ class _SessionScreenState extends State<SessionScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.bgDeep,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 16),
-          color: AppColors.textSecondary,
+          icon: const Icon(CupertinoIcons.chevron_left, size: 16),
+          color: AppColors.ai,
           onPressed: () => Navigator.pop(context),
         ),
         titleSpacing: 0,
@@ -177,7 +178,7 @@ class _SessionScreenState extends State<SessionScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh_rounded, size: 18),
+            icon: const Icon(CupertinoIcons.arrow_clockwise, size: 17),
             color: AppColors.textMuted,
             tooltip: 'Refresh',
             onPressed: _load,
@@ -192,10 +193,7 @@ class _SessionScreenState extends State<SessionScreen> {
       ),
       body: _loading
           ? const Center(
-              child: CircularProgressIndicator(
-                color: AppColors.textMuted,
-                strokeWidth: 1.5,
-              ),
+              child: CupertinoActivityIndicator(color: AppColors.textMuted),
             )
           : _error != null
               ? _buildError()
@@ -215,8 +213,8 @@ class _SessionScreenState extends State<SessionScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_outlined,
-                size: 36, color: AppColors.textMuted),
+            const Icon(CupertinoIcons.wifi_slash,
+                size: 34, color: AppColors.textMuted),
             const SizedBox(height: 14),
             Text(
               'Could not load session',

@@ -1,4 +1,6 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
 import 'pulsing_dot.dart';
@@ -39,6 +41,7 @@ class _SessionCardState extends State<SessionCard> {
       (widget.session['status'] as String? ?? '').toLowerCase();
 
   Future<void> _handleLeave() async {
+    HapticFeedback.lightImpact();
     setState(() => _leaving = true);
     try {
       widget.onLeave();
@@ -64,18 +67,18 @@ class _SessionCardState extends State<SessionCard> {
           left: 24,
           right: 24,
           top: 24,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 32,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 36,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Handle bar
+            // Handle
             Center(
               child: Container(
                 width: 36,
                 height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
+                margin: const EdgeInsets.only(bottom: 22),
                 decoration: BoxDecoration(
                   color: AppColors.border,
                   borderRadius: BorderRadius.circular(2),
@@ -88,7 +91,7 @@ class _SessionCardState extends State<SessionCard> {
               'Leave empty to reset to the default name.',
               style: AppText.ui(size: 13, color: AppColors.textMuted),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 22),
             TextField(
               controller: controller,
               autofocus: true,
@@ -103,8 +106,7 @@ class _SessionCardState extends State<SessionCard> {
                   child: OutlinedButton(
                     onPressed: () => Navigator.pop(ctx, null),
                     child: Text('Cancel',
-                        style: AppText.ui(
-                            size: 14, weight: FontWeight.w500)),
+                        style: AppText.ui(size: 14, weight: FontWeight.w500)),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -136,7 +138,8 @@ class _SessionCardState extends State<SessionCard> {
     final status = _status();
     final isLive = AppStatus.isLive(status);
     final palette = status.isNotEmpty ? AppStatus.palette(status) : null;
-    final isResumable = (widget.session['agentSessionId'] as String?)?.isNotEmpty == true;
+    final isResumable =
+        (widget.session['agentSessionId'] as String?)?.isNotEmpty == true;
 
     return GestureDetector(
       onTapDown: (_) => setState(() => _pressed = true),
@@ -145,65 +148,53 @@ class _SessionCardState extends State<SessionCard> {
       onTap: widget.onTap ?? _handleRename,
       child: AnimatedScale(
         scale: _pressed ? 0.98 : 1.0,
-        duration: const Duration(milliseconds: 120),
+        duration: const Duration(milliseconds: 110),
         curve: Curves.easeOut,
         child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
           decoration: BoxDecoration(
-            color: AppColors.bgBase,
-            borderRadius: BorderRadius.circular(14),
+            color: isLive
+                ? Color.lerp(AppColors.bgBase, AppColors.running, 0.04)!
+                : AppColors.bgBase,
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: isLive ? AppColors.runningBorder : AppColors.border,
             ),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: Stack(
-              children: [
-                // Live session: subtle left accent
-                if (isLive)
-                  Positioned(
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    child: Container(
-                      width: 3,
-                      decoration: BoxDecoration(
-                        color: AppColors.running,
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(14),
-                          bottomLeft: Radius.circular(14),
-                        ),
-                      ),
+            boxShadow: isLive
+                ? [
+                    BoxShadow(
+                      color: AppColors.running.withValues(alpha: 0.10),
+                      blurRadius: 24,
+                      spreadRadius: -2,
+                      offset: const Offset(0, 4),
                     ),
-                  ),
-
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                      isLive ? 18 : 14, 14, 14, 14),
+                  ]
+                : null,
+          ),
+          child: Padding(
+                  padding: const EdgeInsets.all(14),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      AgentBadge(agent: agent, size: 38),
+                      AgentBadge(agent: agent, size: 40),
 
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Session name
                             Text(
                               _displayName(),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: AppText.ui(
-                                size: 15,
-                                weight: FontWeight.w600,
+                              style: AppText.display(
+                                size: 16,
+                                weight: isLive
+                                    ? FontWeight.w700
+                                    : FontWeight.w600,
                                 color: AppColors.textPrimary,
                               ),
                             ),
                             const SizedBox(height: 5),
-
-                            // Agent + status row
                             Row(
                               children: [
                                 if (agent.isNotEmpty)
@@ -224,8 +215,8 @@ class _SessionCardState extends State<SessionCard> {
                                 if (isResumable) ...[
                                   const SizedBox(width: 6),
                                   const Icon(
-                                    Icons.replay_rounded,
-                                    size: 11,
+                                    CupertinoIcons.arrow_counterclockwise,
+                                    size: 10,
                                     color: AppColors.textMuted,
                                   ),
                                 ],
@@ -237,59 +228,41 @@ class _SessionCardState extends State<SessionCard> {
 
                       const SizedBox(width: 12),
 
-                      // Leave button + tappability chevron
                       _leaving
-                          ? SizedBox(
-                              width: 34,
-                              height: 34,
+                          ? const SizedBox(
+                              width: 32,
+                              height: 32,
                               child: Center(
                                 child: SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 1.5,
+                                  width: 14,
+                                  height: 14,
+                                  child: CupertinoActivityIndicator(
                                     color: AppColors.textMuted,
                                   ),
                                 ),
                               ),
                             )
-                          : Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                GestureDetector(
-                                  onTap: _handleLeave,
-                                  behavior: HitTestBehavior.opaque,
-                                  child: Container(
-                                    width: 34,
-                                    height: 34,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.errorBg,
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                          color: AppColors.errorBorder),
-                                    ),
-                                    child: Icon(
-                                      Icons.logout_rounded,
-                                      size: 15,
-                                      color: AppColors.error
-                                          .withValues(alpha: 0.85),
-                                    ),
-                                  ),
+                          : GestureDetector(
+                              onTap: _handleLeave,
+                              behavior: HitTestBehavior.opaque,
+                              child: Container(
+                                width: 30,
+                                height: 30,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                      color: AppColors.borderSubtle),
                                 ),
-                                const SizedBox(width: 8),
-                                const Icon(
-                                  Icons.chevron_right_rounded,
-                                  size: 18,
+                                child: const Icon(
+                                  CupertinoIcons.xmark,
+                                  size: 12,
                                   color: AppColors.textMuted,
                                 ),
-                              ],
+                              ),
                             ),
                     ],
                   ),
                 ),
-              ],
-            ),
-          ),
         ),
       ),
     );
@@ -315,7 +288,8 @@ class _StatusPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
         color: palette.bg,
-        borderRadius: BorderRadius.circular(5),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: palette.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -392,7 +366,6 @@ class AgentBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: path != null ? AppColors.bgElevated : _fallback(agent).bg,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: AppColors.border),
       ),
       clipBehavior: Clip.antiAlias,
       child: path != null
