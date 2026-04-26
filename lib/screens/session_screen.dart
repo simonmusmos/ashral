@@ -65,8 +65,13 @@ class _SessionScreenState extends State<SessionScreen> {
     final status = (detail['status'] as String? ?? '').toLowerCase();
     final hasPending = detail['pendingAction'] != null;
     final isActive = hasPending || status == 'running' || status == 'active';
+    final isTerminal = status == 'terminated' || status == 'completed';
     if (isActive) {
       _refreshTimer = Timer(const Duration(seconds: 8), _load);
+    } else if (isTerminal && detail['agentSessionId'] == null) {
+      // One final refresh a few seconds after termination to catch any
+      // agentSessionId writes that landed after our last poll.
+      _refreshTimer = Timer(const Duration(seconds: 3), _load);
     }
   }
 
@@ -140,9 +145,6 @@ class _SessionScreenState extends State<SessionScreen> {
     if (a is Map<String, dynamic>) return a;
     return null;
   }
-
-  String? get _agentSessionId =>
-      _detail?['agentSessionId'] as String?;
 
   // ── Build ─────────────────────────────────────────────────────────────────
 
@@ -295,7 +297,7 @@ class _SessionScreenState extends State<SessionScreen> {
             child: _buildPendingActionBox(_pendingAction!),
           ),
         ],
-        if (_agentSessionId != null) ...[
+        if (_status == 'terminated' || _status == 'completed') ...[
           const SizedBox(height: 20),
           _buildSection(
             label: 'RESUME',

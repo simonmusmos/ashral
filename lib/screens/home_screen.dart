@@ -24,6 +24,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Map<String, dynamic>> _sessions = [];
   bool _loadingSessions = true;
   String? _sessionsError;
+  final Set<String> _leavingIds = {};
 
   @override
   void initState() {
@@ -58,37 +59,58 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       CupertinoPageRoute(builder: (_) => const QrScannerScreen()),
     );
-    if (sessionId != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Connected to session',
-              style: AppText.ui(size: 13, color: AppColors.textPrimary)),
-          backgroundColor: AppColors.bgElevated,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
-      _loadSessions();
+    if (sessionId == null || !mounted) return;
+
+    // Navigate directly to the session — no snackbar, no reload flash
+    await Navigator.push(
+      context,
+      CupertinoPageRoute(
+        builder: (_) => AgentOutputScreen(sessionId: sessionId),
+      ),
+    );
+
+    // Silently refresh the list when the user returns
+    if (mounted) {
+      SessionService.getSessions()
+          .then((updated) { if (mounted) setState(() => _sessions = updated); })
+          .catchError((_) {});
     }
   }
 
   Future<void> _leaveSession(String sessionId) async {
+    // Start the slide-out animation immediately (optimistic)
+    if (mounted) setState(() => _leavingIds.add(sessionId));
+
     try {
       await SessionService.leaveSession(sessionId);
-      _loadSessions();
     } catch (e) {
+      // Reverse: remove from leaving set so the animation plays back
+      if (mounted) setState(() => _leavingIds.remove(sessionId));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to leave: $e',
-                style: AppText.ui(size: 13, color: AppColors.textPrimary)),
-            backgroundColor: AppColors.errorBg,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed to remove: $e',
+              style: AppText.ui(size: 13, color: AppColors.textPrimary)),
+          backgroundColor: AppColors.errorBg,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ));
       }
+      return;
     }
+
+    // Wait for the animation to finish before collapsing the slot
+    await Future.delayed(const Duration(milliseconds: 340));
+    if (mounted) {
+      setState(() {
+        _leavingIds.remove(sessionId);
+        _sessions.removeWhere((s) => (s['sessionId'] ?? s['id']) == sessionId);
+      });
+    }
+
+    // Silent background refresh — no loading spinner
+    SessionService.getSessions()
+        .then((updated) { if (mounted) setState(() => _sessions = updated); })
+        .catchError((_) {});
   }
 
   Future<void> _renameSession(String sessionId, String? customName) async {
@@ -161,20 +183,20 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
       child: Row(
         children: [
-            RichText(
-              text: TextSpan(
-                children: [
-                  TextSpan(
-                    text: 'A',
-                    style: AppText.display(
-                        size: 21, weight: FontWeight.w800, color: AppColors.ai),
-                  ),
-                  TextSpan(
-                    text: 'shral',
-                    style: AppText.display(size: 21, letterSpacing: -0.5),
-                  ),
-                ],
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset(
+                  'assets/images/app_logo/logo_transparent.png',
+                  width: 28,
+                  height: 28,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Ashral',
+                  style: AppText.display(size: 21, letterSpacing: -0.5),
+                ),
+              ],
             ),
             if (liveCount > 0) ...[
               const SizedBox(width: 8),
@@ -324,23 +346,98 @@ class _HomeScreenState extends State<HomeScreen> {
           final sessionId = session['sessionId'] as String? ??
               session['id'] as String? ??
               '';
-          return SessionCard(
-            session: session,
-            onLeave: () => _leaveSession(sessionId),
-            onRename: (customName) =>
-                _renameSession(sessionId, customName),
-            onTap: () => Navigator.push(
-              context,
-              CupertinoPageRoute(
-                builder: (_) => AgentOutputScreen(
-                  sessionId: sessionId,
-                  sessionMeta: session,
+          return _SlideOutItem(
+            key: ValueKey(sessionId),
+            leaving: _leavingIds.contains(sessionId),
+            child: SessionCard(
+              session: session,
+              onLeave: () => _leaveSession(sessionId),
+              onRename: (customName) =>
+                  _renameSession(sessionId, customName),
+              onTap: () => Navigator.push(
+                context,
+                CupertinoPageRoute(
+                  builder: (_) => AgentOutputScreen(
+                    sessionId: sessionId,
+                    sessionMeta: session,
+                  ),
                 ),
               ),
             ),
           );
         },
       ),
+    );
+  }
+}
+
+// ── Slide-out animation wrapper ───────────────────────────────────────────────
+
+class _SlideOutItem extends StatefulWidget {
+  final bool leaving;
+  final Widget child;
+  const _SlideOutItem({super.key, required this.leaving, required this.child});
+
+  @override
+  State<_SlideOutItem> createState() => _SlideOutItemState();
+}
+
+class _SlideOutItemState extends State<_SlideOutItem>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<Offset> _slide;
+  late final Animation<double> _fade;
+  late final Animation<double> _size;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
+    _slide = Tween(begin: Offset.zero, end: const Offset(1.3, 0)).animate(
+      CurvedAnimation(
+          parent: _ctrl,
+          curve: const Interval(0.0, 0.75, curve: Curves.easeIn)),
+    );
+    _fade = Tween(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(
+          parent: _ctrl, curve: const Interval(0.0, 0.6)),
+    );
+    _size = Tween(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(
+          parent: _ctrl,
+          curve: const Interval(0.55, 1.0, curve: Curves.easeOut)),
+    );
+  }
+
+  @override
+  void didUpdateWidget(_SlideOutItem old) {
+    super.didUpdateWidget(old);
+    if (widget.leaving && !old.leaving) _ctrl.forward();
+    if (!widget.leaving && old.leaving) _ctrl.reverse();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (_, child) => SizeTransition(
+        sizeFactor: _size,
+        axisAlignment: -1.0,
+        child: FadeTransition(
+          opacity: _fade,
+          child: SlideTransition(position: _slide, child: child),
+        ),
+      ),
+      child: widget.child,
     );
   }
 }

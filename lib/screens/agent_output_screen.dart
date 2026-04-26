@@ -41,6 +41,9 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
   String? _respondingAction;
   Map<String, dynamic>? _sessionDetail;
   Duration _elapsed = Duration.zero;
+  final TextEditingController _messageController = TextEditingController();
+  bool _isSendingMessage = false;
+  bool _waitingForReply = false;
 
   final _headerKey = GlobalKey();
   double _headerExtent = 210.0;
@@ -59,6 +62,7 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
     _elapsedTimer?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    _messageController.dispose();
     super.dispose();
   }
 
@@ -109,6 +113,7 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
       final detail = results[1] as Map<String, dynamic>;
 
       bool added = false;
+      bool hasNewAiOutput = false;
       for (final chunk in incoming) {
         final id = chunk['chunkId'] as String? ?? '';
         if (id.isNotEmpty && _seenIds.contains(id)) continue;
@@ -124,6 +129,7 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
         if (id.isNotEmpty) _seenIds.add(id);
         _chunks.add(chunk);
         added = true;
+        if (chunk['stream'] == 'stdout') hasNewAiOutput = true;
       }
 
       final rawAction = detail['pendingAction'];
@@ -140,7 +146,14 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
         _initialLoading = false;
         _error = null;
         _sessionDetail = detail.isNotEmpty ? detail : _sessionDetail;
+        // Capture whether we had a pending action BEFORE the update so we can
+        // detect when a genuinely new one arrives (vs the same one persisting).
+        final hadNoPendingAction = _pendingAction == null;
         if (_respondingAction == null) _pendingAction = pendingAction;
+        // Stop the spinner only when Claude actually produced something new:
+        // a fresh stdout chunk, or a brand-new pending action (question).
+        final isNewPendingAction = hadNoPendingAction && pendingAction != null;
+        if (hasNewAiOutput || isNewPendingAction) _waitingForReply = false;
       });
 
       final cost = (detail['stats']?['cost'] as num?)?.toDouble();
@@ -166,10 +179,14 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
     _pollTimer = Timer(const Duration(seconds: 3), _poll);
   }
 
-  Future<void> _respond(String action) async {
+  Future<void> _respond(String action, {String? displayLabel}) async {
     _pollTimer?.cancel();
     HapticFeedback.mediumImpact();
-    setState(() => _respondingAction = action);
+    _addOptimisticMessage(displayLabel ?? action);
+    setState(() {
+      _respondingAction = action;
+      _waitingForReply = true;
+    });
     try {
       await SessionService.respondToAction(
           sessionId: widget.sessionId, action: action);
@@ -193,6 +210,53 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
     }
   }
 
+  void _addOptimisticMessage(String text) {
+    final normalized = text
+        .replaceAll(RegExp(r'^[\u{1F300}-\u{1FAFF}\s]+', unicode: true), '')
+        .trim();
+    if (normalized.isEmpty) return;
+    final localId = 'opt_${DateTime.now().millisecondsSinceEpoch}';
+    _seenIds.add(localId);
+    _seenTexts.add(normalized);
+    _chunks.add({'chunkId': localId, 'text': text, 'stream': 'stderr'});
+    if (_autoScroll) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    }
+  }
+
+  Future<void> _sendMessage() async {
+    final text = _messageController.text.trim();
+    if (text.isEmpty || _isSendingMessage) return;
+    HapticFeedback.mediumImpact();
+    _messageController.clear();
+    FocusManager.instance.primaryFocus?.unfocus();
+    _addOptimisticMessage(text);
+    setState(() {
+      _isSendingMessage = true;
+      _waitingForReply = true;
+    });
+    try {
+      await SessionService.respondToAction(
+          sessionId: widget.sessionId, action: text);
+      if (mounted && _pendingAction != null) {
+        setState(() => _pendingAction = null);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed to send: $e',
+              style: AppText.ui(size: 13, color: AppColors.textPrimary)),
+          backgroundColor: AppColors.errorBg,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _isSendingMessage = false);
+    }
+  }
+
   void _scrollToBottom() {
     if (!_scrollController.hasClients) return;
     _scrollController.animateTo(
@@ -207,16 +271,17 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
   String get _displayName {
     final detail = _sessionDetail;
     final meta = widget.sessionMeta;
-    if (detail != null) {
-      final n = detail['name'] as String?;
-      if (n != null && n.isNotEmpty) return n;
-    }
-    if (meta != null) {
-      final cn = meta['customName'] as String?;
-      if (cn != null && cn.isNotEmpty) return cn;
-      final n = meta['name'] as String?;
-      if (n != null && n.isNotEmpty) return n;
-    }
+
+    // User's custom name always takes priority over the CLI-assigned name
+    final customName = (meta?['customName'] as String?)?.trim() ??
+        (detail?['customName'] as String?)?.trim();
+    if (customName != null && customName.isNotEmpty) return customName;
+
+    // Fall back to the session name set by the CLI
+    final name = (detail?['name'] as String?)?.trim() ??
+        (meta?['name'] as String?)?.trim();
+    if (name != null && name.isNotEmpty) return name;
+
     return widget.sessionId;
   }
 
@@ -230,7 +295,15 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
       (widget.sessionMeta?['status'] as String?) ??
       '';
 
-  String? get _agentSessionId => _sessionDetail?['agentSessionId'] as String?;
+  bool get _sessionAcceptsInput {
+    final s = _status.toLowerCase();
+    return s.isNotEmpty &&
+        s != 'completed' &&
+        s != 'error' &&
+        s != 'terminated' &&
+        s != 'done' &&
+        s != 'failed';
+  }
 
   Map<String, dynamic>? get _stats {
     final s = _sessionDetail?['stats'];
@@ -270,6 +343,7 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
     final bottomPad = MediaQuery.of(context).padding.bottom;
     final hasPending = _pendingAction != null &&
         (_pendingAction!['options'] as List?)?.isNotEmpty == true;
+    final isLive = AppStatus.isLive(_status);
 
     if (_initialLoading) {
       return const Scaffold(
@@ -294,6 +368,7 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
             Positioned.fill(
               child: _buildScrollableBody(
                 hasPending: hasPending,
+                isLive: isLive,
                 bottomPad: bottomPad,
               ),
             ),
@@ -303,12 +378,16 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
               right: 0,
               child: _buildBlurHeader(),
             ),
-            if (hasPending)
+            if (hasPending || _sessionAcceptsInput)
               Positioned(
                 left: 0,
                 right: 0,
                 bottom: 0,
-                child: _buildActionBar(_pendingAction!, bottomPad),
+                child: _buildBottomBar(
+                  hasPending: hasPending,
+                  isLive: isLive,
+                  bottomPad: bottomPad,
+                ),
               ),
           ],
         ),
@@ -462,20 +541,21 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
 
   Widget _buildScrollableBody({
     required bool hasPending,
+    required bool isLive,
     required double bottomPad,
   }) {
     if (_chunks.isEmpty) {
-      final agentSessionId = _agentSessionId;
-      final showResume = agentSessionId != null && !AppStatus.isLive(_status);
+      final showResume = !isLive && (_status == 'terminated' || _status == 'completed');
       return Column(
         children: [
           SizedBox(height: _headerExtent),
           Expanded(child: _buildEmptyState()),
-          if (showResume) _buildResumeFooter(agentSessionId),
+          if (showResume) _buildResumeFooter(),
+          if (_sessionAcceptsInput) SizedBox(height: bottomPad + 72),
         ],
       );
     }
-    return _buildTerminal(hasPending: hasPending, bottomPad: bottomPad);
+    return _buildTerminal(hasPending: hasPending, isLive: isLive, bottomPad: bottomPad);
   }
 
   static bool _isSystemChunk(String text) {
@@ -507,11 +587,11 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
 
   Widget _buildTerminal({
     required bool hasPending,
+    required bool isLive,
     required double bottomPad,
   }) {
-    final agentSessionId = _agentSessionId;
-    final showResume = agentSessionId != null && !AppStatus.isLive(_status);
-    final agentLabel = _agentName.isNotEmpty ? _agentName : 'Agent';
+    final showResume = !isLive && (_status == 'terminated' || _status == 'completed');
+    final agentLabel = _displayName;
 
     final visibleChunks = <Map<String, dynamic>>[];
     for (final chunk in _chunks) {
@@ -521,6 +601,7 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
       visibleChunks.add(chunk);
     }
 
+    final showSpinner = _waitingForReply;
     return ListView.builder(
       controller: _scrollController,
       physics:
@@ -529,12 +610,21 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
         0,
         _headerExtent + 8,
         0,
-        hasPending ? bottomPad + 160 : 40,
+        hasPending && _sessionAcceptsInput
+            ? bottomPad + 236
+            : hasPending
+                ? bottomPad + 160
+                : _sessionAcceptsInput
+                    ? bottomPad + 88
+                    : 40,
       ),
-      itemCount: visibleChunks.length + (showResume ? 1 : 0),
+      itemCount: visibleChunks.length + (showResume ? 1 : 0) + (showSpinner ? 1 : 0),
       itemBuilder: (context, i) {
         if (showResume && i == visibleChunks.length) {
-          return _buildResumeFooter(agentSessionId);
+          return _buildResumeFooter();
+        }
+        if (showSpinner && i == visibleChunks.length + (showResume ? 1 : 0)) {
+          return const _WaitingSpinner();
         }
         final chunk = visibleChunks[i];
         final text = (chunk['text'] as String? ?? '').trim();
@@ -575,7 +665,7 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
     );
   }
 
-  Widget _buildResumeFooter(String agentSessionId) {
+  Widget _buildResumeFooter() {
     final shortId = (_sessionDetail?['shortId'] as String?) ??
         widget.sessionId.replaceAll('-', '').substring(0, 8);
     final command = 'ashral resume $shortId';
@@ -695,6 +785,104 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
     );
   }
 
+  // ── Bottom overlay: message input + optional pending-action bar ──────────
+
+  Widget _buildBottomBar({
+    required bool hasPending,
+    required bool isLive,
+    required double bottomPad,
+  }) {
+    final acceptsInput = _sessionAcceptsInput;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (hasPending)
+          _buildActionBar(_pendingAction!, acceptsInput ? 0 : bottomPad),
+        if (acceptsInput) _buildMessageInput(bottomPad),
+      ],
+    );
+  }
+
+  Widget _buildMessageInput(double bottomPad) {
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xF2000000),
+            border: Border(
+              top: BorderSide(color: AppColors.borderSubtle),
+            ),
+          ),
+          padding: EdgeInsets.fromLTRB(12, 10, 12, bottomPad + 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _messageController,
+                  style: AppText.ui(size: 14, color: AppColors.textPrimary),
+                  decoration: InputDecoration(
+                    hintText: 'Message Claude…',
+                    hintStyle:
+                        AppText.ui(size: 14, color: AppColors.textMuted),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: AppColors.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: AppColors.border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                          color: AppColors.ai.withValues(alpha: 0.55)),
+                    ),
+                    filled: true,
+                    fillColor: AppColors.bgElevated,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    isDense: true,
+                  ),
+                  minLines: 1,
+                  maxLines: 5,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => _sendMessage(),
+                ),
+              ),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: _isSendingMessage ? null : _sendMessage,
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: _isSendingMessage
+                        ? AppColors.ai.withValues(alpha: 0.4)
+                        : AppColors.ai,
+                    shape: BoxShape.circle,
+                  ),
+                  child: _isSendingMessage
+                      ? const Center(
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 1.5, color: AppColors.bgDeep),
+                          ),
+                        )
+                      : const Icon(CupertinoIcons.arrow_up,
+                          size: 18, color: AppColors.bgDeep),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // ── Frosted-glass action bar ──────────────────────────────────────────────
 
   Widget _buildActionBar(Map<String, dynamic> action, double bottomPad) {
@@ -784,7 +972,7 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
         child: Opacity(
           opacity: isBusy && !isLoading ? 0.45 : 1.0,
           child: FilledButton(
-            onPressed: () => _respond(action),
+            onPressed: () => _respond(action, displayLabel: label),
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.success,
               foregroundColor: AppColors.bgDeep,
@@ -813,7 +1001,7 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
       child: Opacity(
         opacity: isBusy && !isLoading ? 0.45 : 1.0,
         child: OutlinedButton(
-          onPressed: () => _respond(action),
+          onPressed: () => _respond(action, displayLabel: label),
           style: OutlinedButton.styleFrom(
             foregroundColor: AppColors.textSecondary,
             side: const BorderSide(color: AppColors.border),
@@ -1216,6 +1404,77 @@ class _CodeBlockBuilder extends MarkdownElementBuilder {
                 style: AppText.mono(
                     size: 12, height: 1.6, color: AppColors.terminalText),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Waiting spinner ────────────────────────────────────────────────────────────
+
+class _WaitingSpinner extends StatefulWidget {
+  const _WaitingSpinner();
+
+  @override
+  State<_WaitingSpinner> createState() => _WaitingSpinnerState();
+}
+
+class _WaitingSpinnerState extends State<_WaitingSpinner>
+    with SingleTickerProviderStateMixin {
+  static const _verbs = [
+    'Thinking',
+    'Working',
+    'Reading',
+    'Writing',
+    'Analyzing',
+    'Planning',
+    'Reasoning',
+  ];
+
+  int _index = 0;
+  Timer? _timer;
+  late AnimationController _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _fade = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+      value: 1,
+    );
+    _timer = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (!mounted) return;
+      _fade.reverse().then((_) {
+        if (!mounted) return;
+        setState(() => _index = (_index + 1) % _verbs.length);
+        _fade.forward();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _fade.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+      child: Row(
+        children: [
+          const CupertinoActivityIndicator(color: AppColors.ai, radius: 7),
+          const SizedBox(width: 10),
+          FadeTransition(
+            opacity: _fade,
+            child: Text(
+              '${_verbs[_index]}…',
+              style: AppText.mono(size: 12, color: AppColors.ai),
             ),
           ),
         ],

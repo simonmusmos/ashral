@@ -113,6 +113,21 @@ class SessionService {
     return chunks.cast<Map<String, dynamic>>();
   }
 
+  static Future<String> resolveShortId(String shortId) async {
+    final response = await http.get(
+      Uri.parse('$kBackendUrl/sessions/short/$shortId'),
+      headers: {'Content-Type': 'application/json'},
+    );
+    if (response.statusCode == 404) {
+      throw Exception('Session not found. Check the code and try again.');
+    }
+    if (response.statusCode != 200) {
+      throw Exception('Server returned ${response.statusCode}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return body['sessionId'] as String;
+  }
+
   static Future<void> respondToAction({
     required String sessionId,
     required String action,

@@ -1,9 +1,12 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../theme/app_theme.dart';
 import 'pulsing_dot.dart';
+
+const _kSkipLeaveConfirm = 'skip_leave_session_confirm';
 
 class SessionCard extends StatefulWidget {
   final Map<String, dynamic> session;
@@ -24,7 +27,6 @@ class SessionCard extends StatefulWidget {
 }
 
 class _SessionCardState extends State<SessionCard> {
-  bool _leaving = false;
   bool _pressed = false;
 
   String _displayName() {
@@ -42,12 +44,110 @@ class _SessionCardState extends State<SessionCard> {
 
   Future<void> _handleLeave() async {
     HapticFeedback.lightImpact();
-    setState(() => _leaving = true);
-    try {
-      widget.onLeave();
-    } finally {
-      if (mounted) setState(() => _leaving = false);
+
+    final prefs = await SharedPreferences.getInstance();
+    final skip = prefs.getBool(_kSkipLeaveConfirm) ?? false;
+
+    if (!skip && mounted) {
+      bool dontAskAgain = false;
+      final confirmed = await showModalBottomSheet<bool>(
+        context: context,
+        backgroundColor: AppColors.bgBase,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          side: BorderSide(color: AppColors.border),
+        ),
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setModalState) => Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      color: AppColors.border,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Text('Remove session', style: AppText.display(size: 18)),
+                const SizedBox(height: 6),
+                Text(
+                  'This removes the session from your list. The session itself stays active — you can re-join it any time with the session code.',
+                  style: AppText.ui(size: 13, color: AppColors.textMuted, height: 1.5),
+                ),
+                const SizedBox(height: 20),
+                GestureDetector(
+                  onTap: () => setModalState(() => dontAskAgain = !dontAskAgain),
+                  behavior: HitTestBehavior.opaque,
+                  child: Row(
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          color: dontAskAgain ? AppColors.ai : Colors.transparent,
+                          borderRadius: BorderRadius.circular(5),
+                          border: Border.all(
+                            color: dontAskAgain ? AppColors.ai : AppColors.border,
+                          ),
+                        ),
+                        child: dontAskAgain
+                            ? const Icon(Icons.check, size: 13, color: AppColors.bgDeep)
+                            : null,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        "Don't ask again",
+                        style: AppText.ui(size: 13, color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: Text('Cancel',
+                            style: AppText.ui(size: 14, weight: FontWeight.w500)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.errorBg,
+                          foregroundColor: AppColors.textPrimary,
+                        ),
+                        child: Text('Remove',
+                            style: AppText.ui(
+                                size: 14,
+                                weight: FontWeight.w600,
+                                color: AppColors.textPrimary)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      if (confirmed != true) return;
+      if (dontAskAgain) await prefs.setBool(_kSkipLeaveConfirm, true);
     }
+
+    widget.onLeave();
   }
 
   Future<void> _handleRename() async {
@@ -228,21 +328,7 @@ class _SessionCardState extends State<SessionCard> {
 
                       const SizedBox(width: 12),
 
-                      _leaving
-                          ? const SizedBox(
-                              width: 32,
-                              height: 32,
-                              child: Center(
-                                child: SizedBox(
-                                  width: 14,
-                                  height: 14,
-                                  child: CupertinoActivityIndicator(
-                                    color: AppColors.textMuted,
-                                  ),
-                                ),
-                              ),
-                            )
-                          : GestureDetector(
+                      GestureDetector(
                               onTap: _handleLeave,
                               behavior: HitTestBehavior.opaque,
                               child: Container(
@@ -364,7 +450,7 @@ class AgentBadge extends StatelessWidget {
       height: size,
       margin: const EdgeInsets.only(right: 12),
       decoration: BoxDecoration(
-        color: path != null ? AppColors.bgElevated : _fallback(agent).bg,
+        color: path != null ? Colors.transparent : _fallback(agent).bg,
         borderRadius: BorderRadius.circular(radius),
       ),
       clipBehavior: Clip.antiAlias,

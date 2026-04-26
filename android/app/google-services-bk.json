@@ -7,28 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:27067095291:android:aebff017fd019098e6b85e",
-        "android_client_info": {
-          "package_name": "com.malaiah_labs.ashral"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyAYK-Dc1FdUMIOBVrxoHxf1pp_yKdMpDuI"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
         "mobilesdk_app_id": "1:27067095291:android:6cc866750e14b2fde6b85e",
         "android_client_info": {
-          "package_name": "com.malaiahlabs.ashral"
+          "package_name": "com.malaiah_labs.ashral"
         }
       },
       "oauth_client": [],
