@@ -146,6 +146,9 @@ class _QrScannerScreenState extends State<QrScannerScreen>
     if (!mounted) return;
 
     final codeController = TextEditingController();
+    var verifying = false;
+    String? verifyError;
+
     final result = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -154,75 +157,129 @@ class _QrScannerScreenState extends State<QrScannerScreen>
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         side: BorderSide(color: AppColors.border),
       ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          left: 24,
-          right: 24,
-          top: 24,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 36,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 22),
-                decoration: BoxDecoration(
-                  color: AppColors.border,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          Future<void> verify() async {
+            final code = codeController.text;
+            if (code.length != 8 || verifying) return;
+            setModalState(() {
+              verifying = true;
+              verifyError = null;
+            });
+            try {
+              final sessionId = _isShortId(code)
+                  ? await SessionService.resolveShortId(code)
+                  : code;
+              if (ctx.mounted) Navigator.pop(ctx, sessionId);
+            } catch (e) {
+              if (ctx.mounted) {
+                setModalState(() {
+                  verifying = false;
+                  verifyError =
+                      e.toString().replaceFirst('Exception: ', '');
+                });
+              }
+            }
+          }
+
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 24,
+              right: 24,
+              top: 24,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 36,
             ),
-            Text('Enter session code', style: AppText.display(size: 18)),
-            const SizedBox(height: 4),
-            Text(
-              'The 8-character code shown in your terminal.',
-              style: AppText.ui(size: 13, color: AppColors.textMuted),
-            ),
-            const SizedBox(height: 24),
-            _OtpInput(
-              controller: codeController,
-              onCompleted: () => Navigator.pop(ctx, codeController.text),
-            ),
-            const SizedBox(height: 20),
-            Row(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx, null),
-                    child: Text('Cancel',
-                        style: AppText.ui(size: 14, weight: FontWeight.w500)),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ValueListenableBuilder<TextEditingValue>(
-                    valueListenable: codeController,
-                    builder: (_, value, __) => FilledButton(
-                      onPressed: value.text.length == 8
-                          ? () => Navigator.pop(ctx, value.text)
-                          : null,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.textPrimary,
-                        foregroundColor: AppColors.bgDeep,
-                        disabledBackgroundColor:
-                            AppColors.textPrimary.withValues(alpha: 0.25),
-                      ),
-                      child: Text('Continue',
-                          style: AppText.ui(
-                              size: 14,
-                              weight: FontWeight.w600,
-                              color: AppColors.bgDeep)),
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 22),
+                    decoration: BoxDecoration(
+                      color: AppColors.border,
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                 ),
+                Text('Enter session code',
+                    style: AppText.display(size: 18)),
+                const SizedBox(height: 4),
+                Text(
+                  'The 8-character code shown in your terminal.',
+                  style: AppText.ui(size: 13, color: AppColors.textMuted),
+                ),
+                const SizedBox(height: 28),
+                _OtpInput(
+                  controller: codeController,
+                  onCompleted: verifying ? null : verify,
+                ),
+                if (verifyError != null) ...[
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      const Icon(CupertinoIcons.exclamationmark_circle,
+                          size: 13, color: AppColors.error),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: Text(
+                          verifyError!,
+                          style: AppText.ui(
+                              size: 12,
+                              color: AppColors.error,
+                              height: 1.4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: verifying
+                            ? null
+                            : () => Navigator.pop(ctx, null),
+                        child: Text('Cancel',
+                            style: AppText.ui(
+                                size: 14, weight: FontWeight.w500)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: codeController,
+                        builder: (_, value, __) => FilledButton(
+                          onPressed:
+                              (value.text.length == 8 && !verifying)
+                                  ? verify
+                                  : null,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.textPrimary,
+                            foregroundColor: AppColors.bgDeep,
+                            disabledBackgroundColor:
+                                AppColors.textPrimary.withValues(alpha: 0.25),
+                          ),
+                          child: verifying
+                              ? const CupertinoActivityIndicator(
+                                  color: AppColors.bgDeep, radius: 8)
+                              : Text('Continue',
+                                  style: AppText.ui(
+                                      size: 14,
+                                      weight: FontWeight.w600,
+                                      color: AppColors.bgDeep)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
     Future.delayed(const Duration(milliseconds: 400), codeController.dispose);
@@ -760,50 +817,97 @@ class _OtpInputState extends State<_OtpInput> {
     }
   }
 
+  Future<void> _paste() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final raw = (data?.text ?? '').trim();
+    final match =
+        RegExp(r'[0-9a-fA-F]{8}', caseSensitive: false).firstMatch(raw);
+    if (match == null || !mounted) return;
+    final code = match.group(0)!.toLowerCase();
+    widget.controller.value = TextEditingValue(
+      text: code,
+      selection: TextSelection.collapsed(offset: code.length),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final text = widget.controller.text;
-    return SizedBox(
-      height: 52,
-      child: Stack(
-        children: [
-          // Visual cells — pointer events pass through to the hidden field
-          IgnorePointer(
-            child: Row(
-              children: [
-                for (int i = 0; i < _length; i++) ...[
-                  if (i > 0) const SizedBox(width: 6),
-                  Expanded(
-                    child: _OtpCell(
-                      char: i < text.length ? text[i].toUpperCase() : null,
-                      isActive: _hasFocus && i == text.length,
-                    ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: 52,
+          child: Stack(
+            children: [
+              // Visual cells — pointer events pass through to the hidden field
+              IgnorePointer(
+                child: Row(
+                  children: [
+                    for (int i = 0; i < _length; i++) ...[
+                      if (i > 0 && i != 4) const SizedBox(width: 6),
+                      if (i == 4)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 7),
+                          child: Text('–',
+                              style: AppText.mono(
+                                  size: 16, color: AppColors.textMuted)),
+                        ),
+                      Expanded(
+                        child: _OtpCell(
+                          char:
+                              i < text.length ? text[i].toUpperCase() : null,
+                          isActive: _hasFocus && i == text.length,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              // Invisible text field that owns focus and captures keystrokes
+              Positioned.fill(
+                child: Opacity(
+                  opacity: 0,
+                  child: TextField(
+                    controller: widget.controller,
+                    focusNode: _focus,
+                    autofocus: true,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    keyboardType: TextInputType.visiblePassword,
+                    textCapitalization: TextCapitalization.none,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                          RegExp(r'[0-9a-fA-F]')),
+                      LengthLimitingTextInputFormatter(_length),
+                    ],
                   ),
-                ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        GestureDetector(
+          onTap: _paste,
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(CupertinoIcons.doc_on_clipboard,
+                    size: 12, color: AppColors.textMuted),
+                const SizedBox(width: 5),
+                Text(
+                  'Paste from clipboard',
+                  style: AppText.ui(size: 12, color: AppColors.textMuted),
+                ),
               ],
             ),
           ),
-          // Invisible text field that owns focus and captures keystrokes
-          Positioned.fill(
-            child: Opacity(
-              opacity: 0,
-              child: TextField(
-                controller: widget.controller,
-                focusNode: _focus,
-                autofocus: true,
-                autocorrect: false,
-                enableSuggestions: false,
-                keyboardType: TextInputType.visiblePassword,
-                textCapitalization: TextCapitalization.none,
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9a-fA-F]')),
-                  LengthLimitingTextInputFormatter(_length),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -822,15 +926,15 @@ class _OtpCell extends StatelessWidget {
       duration: const Duration(milliseconds: 150),
       height: 52,
       decoration: BoxDecoration(
-        color: AppColors.bgElevated,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: isActive
-              ? AppColors.ai
-              : char != null
-                  ? AppColors.border
-                  : AppColors.borderSubtle,
-          width: isActive ? 1.5 : 1.0,
+        border: Border(
+          bottom: BorderSide(
+            color: isActive
+                ? AppColors.ai
+                : char != null
+                    ? AppColors.border
+                    : AppColors.borderSubtle,
+            width: isActive ? 2.0 : 1.5,
+          ),
         ),
       ),
       alignment: Alignment.center,

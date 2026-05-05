@@ -100,9 +100,6 @@ class SessionService {
     debugPrint(
         'SessionService.fetchSessionOutput: ${response.statusCode} → ${response.body.length} bytes');
     if (response.statusCode == 404) {
-      final body = jsonDecode(response.body) as Map<String, dynamic>?;
-      final code = body?['code'] as String?;
-      if (code == 'SESSION_EXPIRED') throw Exception('Session expired');
       throw Exception('Session not found');
     }
     if (response.statusCode != 200) {

@@ -301,32 +301,40 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (_sessions.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 40),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                CupertinoIcons.antenna_radiowaves_left_right,
-                size: 30,
-                color: AppColors.textMuted,
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'No sessions yet',
-                style: AppText.display(
-                    size: 18, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 7),
-              Text(
-                'Scan a QR code from a running agent to get started',
-                textAlign: TextAlign.center,
-                style: AppText.ui(
-                    size: 13, height: 1.5, color: AppColors.textMuted),
-              ),
-            ],
-          ),
+      return SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Get started', style: AppText.display(size: 20)),
+            const SizedBox(height: 6),
+            Text(
+              'Monitor AI coding agents from your phone.',
+              style: AppText.ui(
+                  size: 13, color: AppColors.textMuted, height: 1.5),
+            ),
+            const SizedBox(height: 32),
+            _GuideStep(
+              number: '1',
+              title: 'Run the CLI on your machine',
+              description:
+                  'Open a terminal on your dev machine and start an agent session.',
+              child: const _TerminalCommand('ashral run claude'),
+            ),
+            _GuideStep(
+              number: '2',
+              title: 'Scan the QR code',
+              description:
+                  'A QR code will appear in your terminal. Tap "Scan to connect" below and point your camera at it.',
+            ),
+            _GuideStep(
+              number: '3',
+              title: "Can't scan? Enter the code",
+              description:
+                  'Tap the keyboard icon on the scanner screen and type the 8-character code shown beneath the QR.',
+              isLast: true,
+            ),
+          ],
         ),
       );
     }
@@ -558,6 +566,131 @@ class _NavIconBtn extends StatelessWidget {
           alignment: Alignment.center,
           child: Icon(icon, size: 17, color: AppColors.textMuted),
         ),
+      ),
+    );
+  }
+}
+
+// ── Guide step ────────────────────────────────────────────────────────────────
+
+class _GuideStep extends StatelessWidget {
+  final String number;
+  final String title;
+  final String description;
+  final Widget? child;
+  final bool isLast;
+
+  const _GuideStep({
+    required this.number,
+    required this.title,
+    required this.description,
+    this.child,
+    this.isLast = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Number column with connector line below
+          SizedBox(
+            width: 28,
+            child: Column(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: AppColors.bgElevated,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    number,
+                    style: AppText.mono(
+                      size: 11,
+                      weight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                if (!isLast)
+                  Expanded(
+                    child: Center(
+                      child: Container(
+                        width: 1,
+                        color: AppColors.borderSubtle,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 14),
+          // Content
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: isLast ? 0 : 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 4),
+                  Text(
+                    title,
+                    style: AppText.ui(size: 14, weight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: AppText.ui(
+                        size: 13, color: AppColors.textMuted, height: 1.5),
+                  ),
+                  if (child != null) ...[
+                    const SizedBox(height: 12),
+                    child!,
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Terminal command pill ──────────────────────────────────────────────────────
+
+class _TerminalCommand extends StatelessWidget {
+  final String command;
+  const _TerminalCommand(this.command);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: AppColors.bgElevated,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Text(
+            '\$ ',
+            style: AppText.mono(
+                size: 13, weight: FontWeight.w600, color: AppColors.ai),
+          ),
+          Expanded(
+            child: Text(
+              command,
+              style: AppText.mono(size: 13, color: AppColors.textSecondary),
+            ),
+          ),
+        ],
       ),
     );
   }
