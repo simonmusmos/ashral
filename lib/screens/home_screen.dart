@@ -19,18 +19,35 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
   bool _permissionDenied = false;
   List<Map<String, dynamic>> _sessions = [];
   bool _loadingSessions = true;
   String? _sessionsError;
   final Set<String> _leavingIds = {};
 
+  late final AnimationController _logoCtrl;
+  late final Animation<double> _logoTurns;
+
   @override
   void initState() {
     super.initState();
+    _logoCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _logoTurns = Tween<double>(begin: 0.0, end: 2.0).animate(
+      CurvedAnimation(parent: _logoCtrl, curve: Curves.easeInOut),
+    );
     _initNotifications();
     _loadSessions();
+  }
+
+  @override
+  void dispose() {
+    _logoCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _initNotifications() async {
@@ -186,10 +203,20 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Image.asset(
-                  'assets/images/app_logo/logo_transparent.png',
-                  width: 28,
-                  height: 28,
+                GestureDetector(
+                  onTap: () {
+                    if (_logoCtrl.isAnimating) return;
+                    HapticFeedback.lightImpact();
+                    _logoCtrl.forward(from: 0.0);
+                  },
+                  child: RotationTransition(
+                    turns: _logoTurns,
+                    child: Image.asset(
+                      'assets/images/app_logo/logo_transparent.png',
+                      width: 28,
+                      height: 28,
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Text(

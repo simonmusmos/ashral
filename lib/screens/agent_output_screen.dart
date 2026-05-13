@@ -9,6 +9,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import '../services/session_service.dart';
 import '../services/usage_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/file_diffs_sheet.dart';
 import '../widgets/pulsing_dot.dart';
 import '../widgets/session_card.dart';
 
@@ -336,6 +337,15 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
     ));
   }
 
+  void _showFileDiffs() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => FileDiffsSheet(sessionId: widget.sessionId),
+    );
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
@@ -438,6 +448,12 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
                       tooltip: 'Copy all',
                       onTap: _copyAll,
                     ),
+                  const SizedBox(width: 2),
+                  _HeaderAction(
+                    icon: CupertinoIcons.doc_text_search,
+                    tooltip: 'Files changed',
+                    onTap: _showFileDiffs,
+                  ),
                   const SizedBox(width: 2),
                   _HeaderAction(
                     icon: CupertinoIcons.arrow_clockwise,
@@ -918,9 +934,9 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
                   ),
                   Expanded(
                     child: Text(
-                      question?.isNotEmpty == true
-                          ? question!
-                          : 'Waiting for your response',
+                      (question != null && question.length >= 20)
+                          ? question
+                          : 'Claude is waiting for your response — check the terminal for details.',
                       style: AppText.ui(
                           size: 14,
                           weight: FontWeight.w500,

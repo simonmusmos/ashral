@@ -141,4 +141,19 @@ class SessionService {
     }
   }
 
+  static Future<List<Map<String, dynamic>>> fetchSessionDiffs(
+      String sessionId) async {
+    final response = await http.get(
+      Uri.parse('$kBackendUrl/sessions/$sessionId/diffs'),
+      headers: {'Content-Type': 'application/json'},
+    );
+    if (response.statusCode == 404) return [];
+    if (response.statusCode != 200) {
+      throw Exception('Server returned ${response.statusCode}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final diffs = body['diffs'] as List<dynamic>? ?? [];
+    return diffs.cast<Map<String, dynamic>>();
+  }
+
 }
