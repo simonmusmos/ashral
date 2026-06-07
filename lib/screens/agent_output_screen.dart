@@ -31,7 +31,8 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
   final List<Map<String, dynamic>> _chunks = [];
   final Set<String> _seenIds = {};
   final Set<String> _seenTexts = {};
-  final List<String> _changedFilePaths = [];
+  final List<Map<String, dynamic>> _diffs = [];
+  final Set<String> _seenDiffIds = {};
   final ScrollController _scrollController = ScrollController();
 
   bool _initialLoading = true;
@@ -116,16 +117,13 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
       final incoming = results[0] as List<Map<String, dynamic>>;
       final detail = results[1] as Map<String, dynamic>;
       final incomingDiffs = results[2] as List<Map<String, dynamic>>;
-      final newPaths = <String>[];
       for (final d in incomingDiffs) {
-        final path = d['path'] as String? ?? '';
-        if (path.isNotEmpty &&
-            !_changedFilePaths.contains(path) &&
-            !newPaths.contains(path)) {
-          newPaths.add(path);
+        final id = d['toolUseId'] as String? ?? '';
+        if (id.isNotEmpty && !_seenDiffIds.contains(id)) {
+          _seenDiffIds.add(id);
+          _diffs.add(d);
         }
       }
-      if (newPaths.isNotEmpty) _changedFilePaths.addAll(newPaths);
 
       bool added = false;
       bool hasNewAiOutput = false;
@@ -632,7 +630,7 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
     }
 
     final showSpinner = _waitingForReply;
-    final showFiles = _changedFilePaths.isNotEmpty;
+    final showFiles = _diffs.isNotEmpty;
     final filesIdx = visibleChunks.length;
     final resumeIdx = filesIdx + (showFiles ? 1 : 0);
     final spinnerIdx = resumeIdx + (showResume ? 1 : 0);
@@ -658,7 +656,7 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
           (showSpinner ? 1 : 0),
       itemBuilder: (context, i) {
         if (showFiles && i == filesIdx) {
-          return _ChangedFilesSection(paths: _changedFilePaths);
+          return _ChangedFilesSection(diffs: _diffs);
         }
         if (showResume && i == resumeIdx) {
           return _buildResumeFooter();
@@ -1459,11 +1457,24 @@ class _CodeBlockBuilder extends MarkdownElementBuilder {
 // ── Changed files section ──────────────────────────────────────────────────────
 
 class _ChangedFilesSection extends StatelessWidget {
-  final List<String> paths;
-  const _ChangedFilesSection({required this.paths});
+  final List<Map<String, dynamic>> diffs;
+  const _ChangedFilesSection({required this.diffs});
 
   @override
   Widget build(BuildContext context) {
+    // Group diffs by path, preserving insertion order
+    final pathOrder = <String>[];
+    final byPath = <String, List<Map<String, dynamic>>>{};
+    for (final d in diffs) {
+      final path = d['path'] as String? ?? '';
+      if (path.isEmpty) continue;
+      if (!byPath.containsKey(path)) {
+        pathOrder.add(path);
+        byPath[path] = [];
+      }
+      byPath[path]!.add(d);
+    }
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
       child: Column(
@@ -1476,13 +1487,13 @@ class _ChangedFilesSection extends StatelessWidget {
               const Icon(CupertinoIcons.doc_text, size: 11, color: AppColors.textMuted),
               const SizedBox(width: 6),
               Text(
-                '${paths.length} file${paths.length == 1 ? '' : 's'} changed',
+                '${pathOrder.length} file${pathOrder.length == 1 ? '' : 's'} changed',
                 style: AppText.mono(size: 10, color: AppColors.textMuted, letterSpacing: 0.3),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          ...paths.map((p) => _FileRow(path: p)),
+          ...pathOrder.map((p) => _FileRow(path: p, diffs: byPath[p]!)),
           const SizedBox(height: 4),
         ],
       ),
@@ -1490,28 +1501,157 @@ class _ChangedFilesSection extends StatelessWidget {
   }
 }
 
-class _FileRow extends StatelessWidget {
+class _FileRow extends StatefulWidget {
   final String path;
-  const _FileRow({required this.path});
+  final List<Map<String, dynamic>> diffs;
+  const _FileRow({required this.path, required this.diffs});
+
+  @override
+  State<_FileRow> createState() => _FileRowState();
+}
+
+class _FileRowState extends State<_FileRow> {
+  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
-    final lastSlash = path.lastIndexOf('/');
-    final filename = lastSlash >= 0 ? path.substring(lastSlash + 1) : path;
+    final lastSlash = widget.path.lastIndexOf('/');
+    final filename = lastSlash >= 0 ? widget.path.substring(lastSlash + 1) : widget.path;
+    final dir = lastSlash > 0 ? widget.path.substring(0, lastSlash) : '';
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          const Icon(CupertinoIcons.doc, size: 11, color: AppColors.textMuted),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Text(
-              filename,
-              style: AppText.mono(size: 11.5, color: AppColors.textPrimary),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: () => setState(() => _expanded = !_expanded),
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const Icon(CupertinoIcons.doc, size: 11, color: AppColors.textMuted),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        filename,
+                        style: AppText.mono(
+                            size: 12, weight: FontWeight.w600, color: AppColors.textPrimary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (dir.isNotEmpty) ...[
+                        const SizedBox(height: 1),
+                        Text(
+                          dir,
+                          style: AppText.mono(size: 10.5, color: AppColors.textMuted),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  _expanded ? CupertinoIcons.chevron_up : CupertinoIcons.chevron_down,
+                  size: 11,
+                  color: AppColors.textMuted,
+                ),
+              ],
             ),
+          ),
+        ),
+        if (_expanded) _InlineDiffView(diffs: widget.diffs),
+      ],
+    );
+  }
+}
+
+class _InlineDiffView extends StatelessWidget {
+  final List<Map<String, dynamic>> diffs;
+  const _InlineDiffView({required this.diffs});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 10, top: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 1.5,
+            margin: const EdgeInsets.only(right: 12),
+            color: AppColors.borderSubtle,
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: IntrinsicWidth(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (int i = 0; i < diffs.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 10),
+                      _InlineDiffChunk(diff: diffs[i]),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InlineDiffChunk extends StatelessWidget {
+  final Map<String, dynamic> diff;
+  const _InlineDiffChunk({required this.diff});
+
+  @override
+  Widget build(BuildContext context) {
+    final oldStr = diff['oldStr'] as String?;
+    final newStr = diff['newStr'] as String? ?? '';
+    final oldLines = (oldStr != null && oldStr.isNotEmpty) ? oldStr.split('\n') : <String>[];
+    final newLines = newStr.split('\n');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final line in oldLines) _InlineDiffLine(prefix: '-', text: line, removed: true),
+        for (final line in newLines) _InlineDiffLine(prefix: '+', text: line, removed: false),
+      ],
+    );
+  }
+}
+
+class _InlineDiffLine extends StatelessWidget {
+  final String prefix;
+  final String text;
+  final bool removed;
+  const _InlineDiffLine({required this.prefix, required this.text, required this.removed});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = removed ? AppColors.error : AppColors.running;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$prefix ',
+            style: AppText.mono(size: 12, weight: FontWeight.w700, color: color),
+          ),
+          Text(
+            text,
+            style: AppText.mono(size: 12, color: color.withValues(alpha: 0.8)),
           ),
         ],
       ),
