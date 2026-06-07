@@ -31,6 +31,7 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
   final List<Map<String, dynamic>> _chunks = [];
   final Set<String> _seenIds = {};
   final Set<String> _seenTexts = {};
+  final List<String> _changedFilePaths = [];
   final ScrollController _scrollController = ScrollController();
 
   bool _initialLoading = true;
@@ -107,11 +108,24 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
         SessionService.fetchSessionOutput(widget.sessionId),
         SessionService.getSessionDetail(widget.sessionId)
             .catchError((_) => <String, dynamic>{}),
+        SessionService.fetchSessionDiffs(widget.sessionId)
+            .catchError((_) => <Map<String, dynamic>>[]),
       ]);
       if (!mounted) return;
 
       final incoming = results[0] as List<Map<String, dynamic>>;
       final detail = results[1] as Map<String, dynamic>;
+      final incomingDiffs = results[2] as List<Map<String, dynamic>>;
+      final newPaths = <String>[];
+      for (final d in incomingDiffs) {
+        final path = d['path'] as String? ?? '';
+        if (path.isNotEmpty &&
+            !_changedFilePaths.contains(path) &&
+            !newPaths.contains(path)) {
+          newPaths.add(path);
+        }
+      }
+      if (newPaths.isNotEmpty) _changedFilePaths.addAll(newPaths);
 
       bool added = false;
       bool hasNewAiOutput = false;
@@ -618,6 +632,10 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
     }
 
     final showSpinner = _waitingForReply;
+    final showFiles = _changedFilePaths.isNotEmpty;
+    final filesIdx = visibleChunks.length;
+    final resumeIdx = filesIdx + (showFiles ? 1 : 0);
+    final spinnerIdx = resumeIdx + (showResume ? 1 : 0);
     return ListView.builder(
       controller: _scrollController,
       physics:
@@ -634,12 +652,18 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
                     ? bottomPad + 88
                     : 40,
       ),
-      itemCount: visibleChunks.length + (showResume ? 1 : 0) + (showSpinner ? 1 : 0),
+      itemCount: visibleChunks.length +
+          (showFiles ? 1 : 0) +
+          (showResume ? 1 : 0) +
+          (showSpinner ? 1 : 0),
       itemBuilder: (context, i) {
-        if (showResume && i == visibleChunks.length) {
+        if (showFiles && i == filesIdx) {
+          return _ChangedFilesSection(paths: _changedFilePaths);
+        }
+        if (showResume && i == resumeIdx) {
           return _buildResumeFooter();
         }
-        if (showSpinner && i == visibleChunks.length + (showResume ? 1 : 0)) {
+        if (showSpinner && i == spinnerIdx) {
           return const _WaitingSpinner();
         }
         final chunk = visibleChunks[i];
@@ -1365,6 +1389,10 @@ class _CodeBlockBuilder extends MarkdownElementBuilder {
     final code = element.textContent as String? ?? '';
     final lang = _lang(element);
 
+    // Inline code (no language class, no newlines) — let MarkdownStyleSheet.code
+    // render it as a colored inline span instead of a block container.
+    if (lang.isEmpty && !code.contains('\n')) return null;
+
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -1420,6 +1448,69 @@ class _CodeBlockBuilder extends MarkdownElementBuilder {
                 style: AppText.mono(
                     size: 12, height: 1.6, color: AppColors.terminalText),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Changed files section ──────────────────────────────────────────────────────
+
+class _ChangedFilesSection extends StatelessWidget {
+  final List<String> paths;
+  const _ChangedFilesSection({required this.paths});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Divider(color: AppColors.borderSubtle, height: 1, thickness: 0.5),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(CupertinoIcons.doc_text, size: 11, color: AppColors.textMuted),
+              const SizedBox(width: 6),
+              Text(
+                '${paths.length} file${paths.length == 1 ? '' : 's'} changed',
+                style: AppText.mono(size: 10, color: AppColors.textMuted, letterSpacing: 0.3),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ...paths.map((p) => _FileRow(path: p)),
+          const SizedBox(height: 4),
+        ],
+      ),
+    );
+  }
+}
+
+class _FileRow extends StatelessWidget {
+  final String path;
+  const _FileRow({required this.path});
+
+  @override
+  Widget build(BuildContext context) {
+    final lastSlash = path.lastIndexOf('/');
+    final filename = lastSlash >= 0 ? path.substring(lastSlash + 1) : path;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          const Icon(CupertinoIcons.doc, size: 11, color: AppColors.textMuted),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              filename,
+              style: AppText.mono(size: 11.5, color: AppColors.textPrimary),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
