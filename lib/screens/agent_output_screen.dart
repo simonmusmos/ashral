@@ -1617,24 +1617,43 @@ class _InlineDiffChunk extends StatelessWidget {
   Widget build(BuildContext context) {
     final oldStr = diff['oldStr'] as String?;
     final newStr = diff['newStr'] as String? ?? '';
+    final startLine = (diff['startLine'] as num?)?.toInt();
     final oldLines = (oldStr != null && oldStr.isNotEmpty) ? oldStr.split('\n') : <String>[];
     final newLines = newStr.split('\n');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final line in oldLines) _InlineDiffLine(prefix: '-', text: line, removed: true),
-        for (final line in newLines) _InlineDiffLine(prefix: '+', text: line, removed: false),
+        for (int i = 0; i < oldLines.length; i++)
+          _InlineDiffLine(
+            lineNum: startLine != null ? startLine + i : i + 1,
+            prefix: '-',
+            text: oldLines[i],
+            removed: true,
+          ),
+        for (int i = 0; i < newLines.length; i++)
+          _InlineDiffLine(
+            lineNum: startLine != null ? startLine + i : i + 1,
+            prefix: '+',
+            text: newLines[i],
+            removed: false,
+          ),
       ],
     );
   }
 }
 
 class _InlineDiffLine extends StatelessWidget {
+  final int lineNum;
   final String prefix;
   final String text;
   final bool removed;
-  const _InlineDiffLine({required this.prefix, required this.text, required this.removed});
+  const _InlineDiffLine({
+    required this.lineNum,
+    required this.prefix,
+    required this.text,
+    required this.removed,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1645,6 +1664,15 @@ class _InlineDiffLine extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          SizedBox(
+            width: 24,
+            child: Text(
+              '$lineNum',
+              textAlign: TextAlign.right,
+              style: AppText.mono(size: 11, color: AppColors.textMuted.withValues(alpha: 0.4)),
+            ),
+          ),
+          const SizedBox(width: 10),
           Text(
             '$prefix ',
             style: AppText.mono(size: 12, weight: FontWeight.w700, color: color),
