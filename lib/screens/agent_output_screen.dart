@@ -586,6 +586,13 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
     return _buildTerminal(hasPending: hasPending, isLive: isLive, bottomPad: bottomPad);
   }
 
+  static String _stripSuggestions(String text) {
+    final lines = text.split('\n');
+    int end = lines.length;
+    while (end > 0 && lines[end - 1].trimLeft().startsWith('> ')) end--;
+    return lines.sublist(0, end).join('\n').trim();
+  }
+
   static bool _isSystemChunk(String text) {
     final t = text.trimLeft();
     const prefixes = [
@@ -610,6 +617,11 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
         RegExp(r'skills/[a-z][a-z0-9-]+/').hasMatch(text)) {
       return true;
     }
+    // Claude Code suggested-action lines: every non-empty line starts with "> "
+    final nonEmpty = text.split('\n').where((l) => l.trim().isNotEmpty).toList();
+    if (nonEmpty.isNotEmpty && nonEmpty.every((l) => l.trimLeft().startsWith('> '))) {
+      return true;
+    }
     return false;
   }
 
@@ -623,10 +635,12 @@ class _AgentOutputScreenState extends State<AgentOutputScreen> {
 
     final visibleChunks = <Map<String, dynamic>>[];
     for (final chunk in _chunks) {
-      final text = (chunk['text'] as String? ?? '').trim();
+      final raw = (chunk['text'] as String? ?? '').trim();
+      if (raw.isEmpty) continue;
+      if (_isSystemChunk(raw)) continue;
+      final text = _stripSuggestions(raw);
       if (text.isEmpty) continue;
-      if (_isSystemChunk(text)) continue;
-      visibleChunks.add(chunk);
+      visibleChunks.add(text == raw ? chunk : {...chunk, 'text': text});
     }
 
     final showSpinner = _waitingForReply;
